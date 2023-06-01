@@ -9,6 +9,8 @@
 
 log("Ready.");
 
+window.addEventListener('unhandledrejection', (e) => log(event.reason, 'red'));
+
 // TODO: either pass dv everywhere, or refer to global everywhere.
 // started using global ref for convenience.
 var dv;
@@ -80,12 +82,15 @@ function executeNextInstruction(dv) {
 
   log(`  opcode is ${opcode}`);
 
+  // opcodes by name: https://inform-fiction.org/zmachine/standards/z1point1/sect15.html
+  // opcodes by number: https://inform-fiction.org/zmachine/standards/z1point1/sect14.html
   switch (opcode) {
-    // opcodes by name: https://inform-fiction.org/zmachine/standards/z1point1/sect15.html
-    // opcodes by number: https://inform-fiction.org/zmachine/standards/z1point1/sect14.html
     case 84:
       // add a b -> (result); a is a 'var', b is a 'small constant'
       ops.add_var_small();
+      break;
+    case 85:
+      ops.sub_var_small(); // i guess?
       break;
     case 97:
       ops.je_var_var();
@@ -250,8 +255,13 @@ const ops = {
     var branchInfo1 = readVar(dv.getUint8(pc + 3, false));
 
     var willJump = (a == b);
-    if (branchInfo1 & 0b1000_0000 == 0) {
+    if ((branchInfo1 & 0b1000_0000) == 0) {
       willJump = !willJump;
+    }
+
+    if (!willJump) {
+      pc += 4;
+      return;
     }
 
     // "If bit 6 is clear, then the offset is a signed 14-bit number given in bits 0 to 5 of the first byte followed by all 8 of the second."
@@ -269,6 +279,15 @@ const ops = {
     }
 
     pc += offset;
+  },
+  sub_var_small: function() {
+    var a = readVar(dv.getUint8(pc + 1, false));
+    var b = dv.getUint8(pc + 2, false);
+    var resultVar = dv.getUint8(pc + 3, false);
+
+    writeVar(resultVar, a - b);
+
+    pc += 4;
   }
 };
 
@@ -276,25 +295,34 @@ function readVar(n) {
   if (n == 0) {
     throw "popping from stack not yet implemented";
   }
+
   if (n < 0x10) {
+    // TODO: validate frame has this many vars
     return topCallStackFrame().localVars[n - 1];
   }
 
-  return dv.getUint16(globalVarAddress(n));
+  return dv.getUint16(globalVarAddress(n), false);
 }
 
 function writeVar(n, x) {
-  if (n == 0) throw "pushing to stack not yet implemented";
-  if (n >= 0x10) throw "writing global vars not yet implemented";
-
-  var frame = topCallStackFrame();
-  var localVarCount = frame.localVars.length;
-
-  if (n - 1 > localVarCount) {
-    throw `illegal to write to var ${n}; frame only has ${localVarCount} local vars`;
+  if (n == 0) {
+    throw "pushing to stack not yet implemented";
   }
 
-  frame.localVars[n - 1] = x;
+  if (n < 0x10) {
+    var frame = topCallStackFrame();
+    var localVarCount = frame.localVars.length;
+
+    if (n - 1 > localVarCount) {
+      throw `illegal to write to var ${n}; frame only has ${localVarCount} local vars`;
+    }
+
+    frame.localVars[n - 1] = x;
+
+    return;
+  }
+
+  dv.setUint16(globalVarAddress(n), x, false);
 }
 
 function globalVarAddress(n) {
@@ -309,14 +337,19 @@ function topCallStackFrame() {
   return callStack[callStack.length - 1];
 }
 
-function log(s) {
+function log(s, color) {
 	var outline = `${new Date().toISOString()} ${s}`;
 
 	console.log(outline);
 
 	var log = document.querySelector("#log");
 	var logpane = document.querySelector("#logpane");
+  var div = document.createElement('div');
 
-	log.textContent += (outline + "\n");
+  if (color) { div.style.color = color; }
+
+	div.textContent = outline;
+
+  log.append(div);
 	logpane.scrollTo(0, logpane.scrollHeight);
 }

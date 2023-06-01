@@ -19,6 +19,15 @@ body {
 	flex-grow: 1;
 }
 
+#panes .pane#mainpane {
+	flex-grow: 0;
+}
+
 #panes .pane#logpane {
 	overflow-y: auto;
+}
+
+#panes .pane#logpane>pre {
+	overflow-y: auto;
+	white-space: pre-wrap;
 }
