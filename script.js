@@ -245,15 +245,42 @@ const ops = {
     // (see 4.7)
     // this says it gives an OFFSET as a SIGNED 14-bit number. does that mean
     // relative to the current... instruction?
+    var a = readVar(dv.getUint8(pc + 1, false));
+    var b = readVar(dv.getUint8(pc + 2, false));
+    var branchInfo1 = readVar(dv.getUint8(pc + 3, false));
+
+    var willJump = (a == b);
+    if (branchInfo1 & 0b1000_0000 == 0) {
+      willJump = !willJump;
+    }
+
+    // "If bit 6 is clear, then the offset is a signed 14-bit number given in bits 0 to 5 of the first byte followed by all 8 of the second."
+    // ...okay, but in what order? assuming straight left-to-right...
+    var offset;
+    if (branchInfo1 & 0b0100_0000) {
+      offset = (branchInfo1 & 0b0011_1111);
+    } else {
+      var offsetBits = dv.getInt16(pc + 3, false) & 0b0011_1111_1111_1111;
+
+      offset = offsetBits & 0b0001_1111_1111_1111;
+      if (offsetBits & 0b0010_0000_0000_0000) {
+        offset = -offset + 1;
+      }
+    }
+
+    pc += offset;
   }
 };
 
 function readVar(n) {
-  if (n == 0) throw "popping from stack not yet implemented";
-  if (n >= 0x10) return dv.getUint16(globalVarAddress(n));
+  if (n == 0) {
+    throw "popping from stack not yet implemented";
+  }
+  if (n < 0x10) {
+    return topCallStackFrame().localVars[n - 1];
+  }
 
-  throw 'not yet implemented'
-  // var frame = topCallStackFrame();
+  return dv.getUint16(globalVarAddress(n));
 }
 
 function writeVar(n, x) {
