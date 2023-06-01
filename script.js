@@ -7,45 +7,107 @@
 // var OPERAND_TYPES_BY_ID = OPERAND_TYPES.reduce((acc, el) => {acc[el.id] = el; return acc}, {});
 // var OPERAND_TYPES_BY_NAME = OPERAND_TYPES.reduce((acc, el) => {acc[el.name] = el; return acc}, {});
 
+log("Ready.");
+
+// TODO: either pass dv everywhere, or refer to global everywhere.
+// started using global ref for convenience.
+var dv;
 var pc = -1;
 var callStack = [];
 
-document.querySelector("#file").addEventListener('change', function(event) {
-  var file = this.files[0];
+var input = document.querySelector("input#file")
 
-  file.arrayBuffer().then((ab) => {
-    var dv = new DataView(ab);
-    // var header = ab.slice(0, 36);
-    pc = dv.getUint16(0x06, false);
-    log("pc: 0x" + pc.toString(16));
+input.addEventListener("change", function() {
+	var file = this.files[0];
+	log(`received file ${file.name} of size ${file.size} bytes`);
 
+	file.arrayBuffer().then((ab) => {
+		//debugger;
+		log(`Read ${ab.byteLength} bytes`);
+
+		dv = new DataView(ab);
+
+		// https://inform-fiction.org/zmachine/standards/z1point1/sect11.html
+
+		var version = dv.getUint8(0x00, false);
+		log("Version: " + version);
+
+		var flags = dv.getUint16(0x01, false);
+		log("Flags: ");
+
+		var statusLineType = flags & 0x01;
+		switch (statusLineType) {
+			case 0: log("  Status line type: score/turns"); break;
+			case 1: log("  Status line type: hours:mins"); break;
+			default: log("  Status line type: UNKNOWN " + statusLineType);
+		}
+
+		var storyFileSplitOverTwoDiscs = Boolean(flags & 0x02);
+		log("  Story file split over two discs: " + storyFileSplitOverTwoDiscs);
+
+		var statusLineUnavailable = Boolean(flags & 0x08);
+		log("  Status line unavailable: " + statusLineUnavailable);
+
+		var screenSplittingAvailable = Boolean(flags & 0x10);
+		log("  Screen-splitting available: " + screenSplittingAvailable);
+
+		var isVariablePitchFontDefault = Boolean(flags & 0x20);
+		log("  Is variable-pitch font default: " + isVariablePitchFontDefault);
+
+		pc = dv.getUint16(0x06, false);
+		// doc says "byte address" - but relative to what?
+		// start of all mem? dynamic? static? high?
+		log("pc: 0x" + pc.toString(16));
+
+		var storyFileLength = dv.getUint16(0x1a, false);
+		log(`Story file length: ${storyFileLength} words (${storyFileLength * 2} bytes)`);
+
+		// and away we go:
     while (true) {
       executeNextInstruction(dv);
     }
-  });
+	});
 });
 
 function executeNextInstruction(dv) {
-  var firstByte = dv.getUint8(pc);
+  log(`Reading next instruction, at address 0x${pc.toString(16)}`);
 
-  log("Next instruction's first byte: " + firstByte);
+  // https://www.inform-fiction.org/zmachine/standards/z1point1/sect04.html
+  var firstByte = dv.getUint8(pc, false);
+  log(`  Found firstByte 0x${firstByte.toString(16).padStart(2, '0')} / 0b${firstByte.toString(2).padStart(8, '0')}`);
 
-  switch (firstByte) {
+  var opcode = firstByte;
+
+  log(`  opcode is ${opcode}`);
+
+  switch (opcode) {
+    // opcodes by name: https://inform-fiction.org/zmachine/standards/z1point1/sect15.html
+    // opcodes by number: https://inform-fiction.org/zmachine/standards/z1point1/sect14.html
+    case 84:
+      // add a b -> (result); a is a 'var', b is a 'small constant'
+      ops.add_var_small();
+      break;
+    case 97:
+      ops.je_var_var();
+      break;
+    case 116:
+      ops.add_var_var();
+      break;
     case 224:
-      log("CALL");
-      instructions.call(dv, pc);
+      ops.call();
       break;
     default:
-      throw "Unrecognized first byte: " + firstByte
+      var formBits = (opcode & 0b11000000) >> 6;
+      var form =
+        formBits == 0b11 ? 'variable' :
+        formBits == 0b10 ? 'short' :
+        'long';
+      throw `unsupported opcode ${opcode}; form is ${form}; bottom 5 bits are ${opcode & 0b11111}`;
   }
 }
 
-function log(s) {
-  console.log(s);
-}
-
-var instructions = {
-  call: function(dv, pc) {
+const ops = {
+	call: function() {
     var operandTypesByte = dv.getUint8(pc + 1, false);
     var operandTypes = [
       (operandTypesByte & 0b11000000) >> 6,
@@ -90,9 +152,9 @@ var instructions = {
     var storeVariable = dv.getUint8(operandPointer, false);
     operandPointer += 1;
 
-    log("operand types: " + operandTypes.join(", "));
-    log("operands: " + operands.map((o) => '0x' + o.toString(16)).join(", "));
-    log("store var: " + storeVariable);
+    log("  operand types: " + operandTypes.join(", "));
+    log("  operands: " + operands.map((o) => '0x' + o.toString(16)).join(", "));
+    log("  store var: " + storeVariable);
 
     // A call gives an address (first arg, i guess?) which is... a "packed address"? (1.2.3),
     // so just double it to get the byte address?
@@ -128,9 +190,17 @@ var instructions = {
     // TODO:
     // setup local vars:
     // 1. count as given by routine itself
-    // 2. values of locals given by routine itself
-    // 3. values of first N locals replaced by ARGS
     var localVars = new Uint16Array(routineLocalVarCount);
+    // 2. values of locals given by routine itself
+    for (var i = 0; i < routineLocalVarCount; i++) {
+      localVars[i] = dv.getUint16(routineAddress + 1 + i, 0);
+    }
+    // 3. values of first N locals replaced by ARGS
+    for (var i = 0; i < routineLocalVarCount; i++) {
+      if (operands.length > i) {
+        localVars[i] = operands[i + 1];
+      }
+    }
 
     var newStackFrame = {
       returnAddress: operandPointer,
@@ -139,7 +209,7 @@ var instructions = {
       // 0x10 - 0xff means into a GLOBAL var.
       storeVariable: storeVariable,
       localVars: localVars
-       //
+      //
     };
 
     callStack.push(newStackFrame);
@@ -147,16 +217,79 @@ var instructions = {
 
     // TODO: set pc via fn, which also logs its new value
 
-    debugger;
+    // throw "opcode 'call' is recognized but not yet supported";
+    // debugger;
+  },
+  add_var_small: function() {
+    var a = readVar(dv.getUint8(pc + 1, false));
+    var b = dv.getUint8(pc + 2, false);
+    var resultVar = dv.getUint8(pc + 3, false);
 
+    writeVar(resultVar, a + b);
 
+    pc += 4;
+  },
+  add_var_var: function() {
+    var a = readVar(dv.getUint8(pc + 1, false));
+    var b = readVar(dv.getUint8(pc + 2, false));
+    var resultVar = dv.getUint8(pc + 3, false);
+
+    writeVar(resultVar, a + b);
+
+    pc += 4;
+  },
+  je_var_var: function() {
+  	// je a b ?(label)
+    // that is: check whether a == b. (that is, compare the VALUES in VARS a and b.)
+    // what to do with the result depends on the byte after b:
+    // (see 4.7)
+    // this says it gives an OFFSET as a SIGNED 14-bit number. does that mean
+    // relative to the current... instruction?
   }
+};
 
+function readVar(n) {
+  if (n == 0) throw "popping from stack not yet implemented";
+  if (n >= 0x10) return dv.getUint16(globalVarAddress(n));
 
+  throw 'not yet implemented'
+  // var frame = topCallStackFrame();
 }
 
-function assert(condition, msg) {
-  if (!condition) {
-    throw msg;
+function writeVar(n, x) {
+  if (n == 0) throw "pushing to stack not yet implemented";
+  if (n >= 0x10) throw "writing global vars not yet implemented";
+
+  var frame = topCallStackFrame();
+  var localVarCount = frame.localVars.length;
+
+  if (n - 1 > localVarCount) {
+    throw `illegal to write to var ${n}; frame only has ${localVarCount} local vars`;
   }
+
+  frame.localVars[n - 1] = x;
+}
+
+function globalVarAddress(n) {
+  if (n < 0x10 || n > 0xff)
+    throw `0x${n.toString(16)} is not a global var number`;
+
+  // 6.2: 240 2-byte words, starting @ addr given at 0x0c in header
+  return dv.getUint16(0x0c, false) + (2 * (n - 0x10));
+}
+
+function topCallStackFrame() {
+  return callStack[callStack.length - 1];
+}
+
+function log(s) {
+	var outline = `${new Date().toISOString()} ${s}`;
+
+	console.log(outline);
+
+	var log = document.querySelector("#log");
+	var logpane = document.querySelector("#logpane");
+
+	log.textContent += (outline + "\n");
+	logpane.scrollTo(0, logpane.scrollHeight);
 }
