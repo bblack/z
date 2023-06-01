@@ -98,6 +98,9 @@ function executeNextInstruction(dv) {
     case 116:
       ops.add_var_var();
       break;
+    case 160:
+      ops.jz_var();
+      break;
     case 224:
       ops.call();
       break;
@@ -252,7 +255,9 @@ const ops = {
     // relative to the current... instruction?
     var a = readVar(dv.getUint8(pc + 1, false));
     var b = readVar(dv.getUint8(pc + 2, false));
-    var branchInfo1 = readVar(dv.getUint8(pc + 3, false));
+    // WARNING! we need to advance the PC here!
+    branchInfoAddress = pc + 3;
+    var branchInfo1 = dv.getUint8(branchInfoAddress, false);
 
     var willJump = (a == b);
     if ((branchInfo1 & 0b1000_0000) == 0) {
@@ -260,25 +265,98 @@ const ops = {
     }
 
     if (!willJump) {
+      // is this right, even when there are TWO "branch info" bytes?
       pc += 4;
+      // ...no, we need one more:
+      if (branchInfoByte1 & 0b0100_0000) { // is there a second "branch info" byte?
+        pc += 1;
+      }
       return;
     }
 
+    // TODO: extract this, and maybe just start advancing the PC on every
+    // byte read?
     // "If bit 6 is clear, then the offset is a signed 14-bit number given in bits 0 to 5 of the first byte followed by all 8 of the second."
     // ...okay, but in what order? assuming straight left-to-right...
+    // TODO dry with other jump ops
+    var branchInfoByte1 = dv.getUint8(branchInfoAddress, false);
+
     var offset;
-    if (branchInfo1 & 0b0100_0000) {
-      offset = (branchInfo1 & 0b0011_1111);
+    var addressAfterBranchData;
+    if (branchInfoByte1 & 0b0100_0000) { // is there a second "branch info" byte?
+      offset = (branchInfoByte1 & 0b0011_1111);
+      addressAfterBranchData = pc + 4;
     } else {
-      var offsetBits = dv.getInt16(pc + 3, false) & 0b0011_1111_1111_1111;
+      // WARNING! we need to advance the PC here one more byte!
+      // TODO: in general, whenever we READ a byte from memory, we should also
+      // ADVANCE the PC to the byte AFTER that byte.
+      // https://inform-fiction.org/zmachine/standards/z1point1/sect04.html
+      // suggests as much:
+      // "The branch formula is sensible because in the natural implementation, the program counter is at the address after the branch data when the branch takes place"
+      var offsetBits = dv.getInt16(branchInfoAddress, false)
+        & 0b0011_1111_1111_1111;
 
       offset = offsetBits & 0b0001_1111_1111_1111;
       if (offsetBits & 0b0010_0000_0000_0000) {
-        offset = -offset + 1;
+        offset = -offset + 1; // 14-bit negate
       }
+      addressAfterBranchData = pc + 5;
     }
 
-    pc += offset;
+    pc = addressAfterBranchData + offset - 2;
+  },
+  jz_var: function() {
+    // jump if a = 0.
+    var a = readVar(dv.getUint8(pc + 1, false));
+    // WARNING! we need to advance the PC here!
+    var branchInfoAddress = pc + 2;
+    var branchInfo1 = dv.getUint8(branchInfoAddress, false);
+
+    var willJump = (a == 0);
+    if ((branchInfo1 & 0b1000_0000) == 0) {
+      willJump = !willJump;
+    }
+
+    if (!willJump) {
+      // is this right, even when there are TWO "branch info" bytes?
+      pc += 3;
+      // no, we need one more:
+      if (branchInfoByte1 & 0b0100_0000) { // is there a second "branch info" byte?
+        pc += 1;
+      }
+      return;
+    }
+
+    // TODO: extract this, and maybe just start advancing the PC on every
+    // byte read?
+    // "If bit 6 is clear, then the offset is a signed 14-bit number given in bits 0 to 5 of the first byte followed by all 8 of the second."
+    // ...okay, but in what order? assuming straight left-to-right...
+    // TODO dry with other jump ops
+    var branchInfoByte1 = dv.getUint8(branchInfoAddress, false);
+
+    var offset;
+    var addressAfterBranchData;
+    if (branchInfoByte1 & 0b0100_0000) { // is there a second "branch info" byte?
+      offset = (branchInfoByte1 & 0b0011_1111);
+      addressAfterBranchData = pc + 3;
+    } else {
+      // WARNING! we need to advance the PC here one more byte!
+      // TODO: in general, whenever we READ a byte from memory, we should also
+      // ADVANCE the PC to the byte AFTER that byte.
+      // https://inform-fiction.org/zmachine/standards/z1point1/sect04.html
+      // suggests as much:
+      // "The branch formula is sensible because in the natural implementation, the program counter is at the address after the branch data when the branch takes place"
+      var offsetBits = dv.getInt16(branchInfoAddress, false)
+        & 0b0011_1111_1111_1111;
+
+      offset = offsetBits & 0b0001_1111_1111_1111;
+      if (offsetBits & 0b0010_0000_0000_0000) {
+        offset = -offset + 1; // 14-bit negate
+      }
+      addressAfterBranchData = pc + 4;
+    }
+
+    pc = addressAfterBranchData + offset - 2; // 4.7.2
   },
   sub_var_small: function() {
     var a = readVar(dv.getUint8(pc + 1, false));
@@ -290,6 +368,7 @@ const ops = {
     pc += 4;
   }
 };
+
 
 function readVar(n) {
   if (n == 0) {
