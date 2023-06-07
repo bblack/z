@@ -104,6 +104,9 @@ function executeNextInstruction(dv) {
     case 224:
       ops.call();
       break;
+		case 225:
+			ops.storew();
+			break;
     default:
       var formBits = (opcode & 0b11000000) >> 6;
       var form =
@@ -116,47 +119,9 @@ function executeNextInstruction(dv) {
 
 const ops = {
 	call: function() {
-    var operandTypesByte = readPC();
-    var operandTypes = [
-      (operandTypesByte & 0b11000000) >> 6,
-      (operandTypesByte & 0b00110000) >> 4,
-      (operandTypesByte & 0b00001100) >> 2,
-      (operandTypesByte & 0b00000011)
-    ];
-    var operands = [];
-    var operandIndex = 0;
-
-    while (true) {
-      if (operandIndex > operandTypes.length) break;
-
-      var operandType = operandTypes[operandIndex];
-
-      if (operandType == 0b11) break;
-
-      var operand;
-
-      switch (operandType) {
-        case 0b00: // large constant
-          operand = readPC16();
-          break;
-        case 0b01: // small constant
-          operand = readPC();
-          break;
-        case 0b10: // variable
-          operand = readPC();
-          break;
-        default:
-          throw "unrecognized operand type 0x" + operandType.toString(16);
-      }
-
-      operands.push(operand);
-      operandIndex += 1;
-    }
-
+		var operands = readOperandsVAR();
     var storeVariable = readPC();
 
-    log("  operand types: " + operandTypes.join(", "));
-    log("  operands: " + operands.map((o) => '0x' + o.toString(16)).join(", "));
     log("  store var: " + storeVariable);
 
     // A call gives an address (first arg, i guess?) which is... a "packed address"? (1.2.3),
@@ -238,7 +203,6 @@ const ops = {
     writeVar(resultVar, a + b);
   },
   je_var_var: function() {
-		debugger;
   	// je a b ?(label)
     // that is: check whether a == b. (that is, compare the VALUES in VARS a and b.)
     // what to do with the result depends on the byte after b:
@@ -312,7 +276,24 @@ const ops = {
     var resultVar = readPC();
 
     writeVar(resultVar, a - b);
-  }
+  },
+	storew: function() {
+		// https://inform-fiction.org/zmachine/standards/z1point1/sect15.html#storew
+		debugger;
+
+		// here we go - we need to
+		// 1) read the operand TYPES (and count i guess, though for storew it's always 3)
+		// 2) use that to get the operand VALUES (reading from vars if indicated)
+		// 3) dry this shit up with "call"
+
+		var operands = readOperandsVAR();
+
+		var arrayAddress = operands[0];
+		var elementIndex = operands[1];
+		var value = operands[2];
+		var elementAddress = arrayAddress + (2 * elementIndex);
+		dv.setUint16(elementAddress, value, false);
+	}
 };
 
 function readPC() {
@@ -325,6 +306,50 @@ function readPC16() {
 	var out = dv.getUint16(pc, false);
 	pc += 2;
 	return out;
+}
+
+function readOperandsVAR() {
+	var operandTypesByte = readPC();
+	var operandTypes = [
+		(operandTypesByte & 0b11000000) >> 6,
+		(operandTypesByte & 0b00110000) >> 4,
+		(operandTypesByte & 0b00001100) >> 2,
+		(operandTypesByte & 0b00000011)
+	];
+	var operands = [];
+	var operandIndex = 0;
+
+	while (true) {
+		if (operandIndex > operandTypes.length) break;
+
+		var operandType = operandTypes[operandIndex];
+
+		if (operandType == 0b11) break;
+
+		var operand;
+
+		switch (operandType) {
+			case 0b00: // large constant
+				operand = readPC16();
+				break;
+			case 0b01: // small constant
+				operand = readPC();
+				break;
+			case 0b10: // variable
+				operand = readVar(readPC());
+				break;
+			default:
+				throw "unrecognized operand type 0x" + operandType.toString(16);
+		}
+
+		operands.push(operand);
+		operandIndex += 1;
+	}
+
+	log("  operand types: " + operandTypes.join(", "));
+	log("  operands: " + operands.map((o) => '0x' + o.toString(16)).join(", "));
+
+	return operands;
 }
 
 function readVar(n) {
