@@ -15,7 +15,17 @@ window.addEventListener('unhandledrejection', (e) => log(event.reason, 'red'));
 // started using global ref for convenience.
 var dv;
 var pc = -1;
-var callStack = [];
+// we start with this special, mostly-empty frame in the call stack, because
+// we need a "substack" at the bottom: apparently we're supposed to be able to
+// push data into "the stack" even if we're not inside a routine.
+var callStack = [
+	{
+		returnAddress: null,
+		storeVariable: null,
+		localVars: null,
+		substack: []
+	}
+];
 
 var input = document.querySelector("input#file")
 
@@ -79,8 +89,19 @@ function executeNextInstruction(dv) {
   log(`  Found firstByte 0x${firstByte.toString(16).padStart(2, '0')} / 0b${firstByte.toString(2).padStart(8, '0')}`);
 
   var opcode = firstByte;
-
   log(`  opcode is ${opcode}`);
+
+	var operands;
+
+	switch ((opcode & 0b1100_0000) >> 6) { // form=?
+		case 0b11: // variable
+			break;
+		case 0b10: // short
+			operands = readOperandsShort(firstByte);
+			break;
+		default: // long
+			break;
+	}
 
   // opcodes by name: https://inform-fiction.org/zmachine/standards/z1point1/sect15.html
   // opcodes by number: https://inform-fiction.org/zmachine/standards/z1point1/sect14.html
@@ -99,8 +120,11 @@ function executeNextInstruction(dv) {
       ops.add_var_var();
       break;
     case 160:
-      ops.jz_var();
+      ops.jz_var(operands);
       break;
+		case 171:
+			ops.ret(operands);
+			break;
     case 224:
       ops.call();
       break;
@@ -176,9 +200,21 @@ const ops = {
       // 0x01 - 0x0f means into a local var of CALLING frame;
       // 0x10 - 0xff means into a GLOBAL var.
       storeVariable: storeVariable,
-      localVars: localVars
-      //
+      localVars: localVars,
+			// unsure if this is right, but this is my understanding of what is meant
+			// by "the stack" in section 6:
+			// 6.3
+			// Writing to the stack pointer (variable number $00) pushes a value onto the stack; reading from it pulls a value off. Stack entries are 2-byte words as usual.
+			//
+			// 6.3.1
+			// The stack is considered as empty at the start of each routine: it is illegal to pull values from it unless values have first been pushed on.
+			//
+			// 6.3.2
+			// The stack is left empty at the end of each routine: when a return occurs, any values pushed during the routine are thrown away.
+			substack: []
     };
+
+		log("Pushing onto callstack: " + JSON.stringify(newStackFrame));
 
     callStack.push(newStackFrame);
     pc = routineAddress + 1 + (2 * routineLocalVarCount);
@@ -239,10 +275,10 @@ const ops = {
 			pc += (offset - 2);
 		}
   },
-  jz_var: function() {
+  jz_var: function(operands) {
     // jump if a == 0.
 		// TODO: still dry this up more better across jump instructions!
-		var a = readVar(readPC());
+		var a = operands[0];
     var b = 0;
     var branchInfo1 = readPC();
 		var branchInfo2; // sometimes present; presence given by a bit in prior byte
@@ -279,13 +315,6 @@ const ops = {
   },
 	storew: function() {
 		// https://inform-fiction.org/zmachine/standards/z1point1/sect15.html#storew
-		debugger;
-
-		// here we go - we need to
-		// 1) read the operand TYPES (and count i guess, though for storew it's always 3)
-		// 2) use that to get the operand VALUES (reading from vars if indicated)
-		// 3) dry this shit up with "call"
-
 		var operands = readOperandsVAR();
 
 		var arrayAddress = operands[0];
@@ -293,6 +322,17 @@ const ops = {
 		var value = operands[2];
 		var elementAddress = arrayAddress + (2 * elementIndex);
 		dv.setUint16(elementAddress, value, false);
+	},
+	ret: function(operands) {
+		var returnValue = operands[0];
+		var topFrame = callStack.pop();
+
+		// this fuckin fails if "storeVariable" is 0 - which means top of stack -
+		// and call stack is empty.
+		// how zzo does this shit is:
+		// 1.
+		writeVar(topFrame.storeVariable, returnValue);
+		pc = topFrame.returnAddress;
 	}
 };
 
@@ -306,6 +346,17 @@ function readPC16() {
 	var out = dv.getUint16(pc, false);
 	pc += 2;
 	return out;
+}
+
+function readOperandsShort(firstByte) {
+	var operandType = (firstByte & 0b0011_0000) >> 4;
+
+	switch (operandType) {
+		case 0b11: // none; 0OP
+			return [];
+		default: // 1OP
+			return [readNextOperand(operandType)];
+	}
 }
 
 function readOperandsVAR() {
@@ -326,21 +377,7 @@ function readOperandsVAR() {
 
 		if (operandType == 0b11) break;
 
-		var operand;
-
-		switch (operandType) {
-			case 0b00: // large constant
-				operand = readPC16();
-				break;
-			case 0b01: // small constant
-				operand = readPC();
-				break;
-			case 0b10: // variable
-				operand = readVar(readPC());
-				break;
-			default:
-				throw "unrecognized operand type 0x" + operandType.toString(16);
-		}
+		var operand = readNextOperand(operandType);
 
 		operands.push(operand);
 		operandIndex += 1;
@@ -352,9 +389,22 @@ function readOperandsVAR() {
 	return operands;
 }
 
+function readNextOperand(operandType) {
+	switch (operandType) {
+		case 0b00: // large constant
+			return readPC16();
+		case 0b01: // small constant
+			return readPC();
+		case 0b10: // variable
+			return readVar(readPC());
+		default:
+			throw "unrecognized operand type 0x" + operandType.toString(16);
+	}
+}
+
 function readVar(n) {
   if (n == 0) {
-    throw "popping from stack not yet implemented";
+    return topCallStackFrame().substack.pop();
   }
 
   if (n < 0x10) {
@@ -367,7 +417,8 @@ function readVar(n) {
 
 function writeVar(n, x) {
   if (n == 0) {
-    throw "pushing to stack not yet implemented";
+    topCallStackFrame().substack.push(x);
+		return;
   }
 
   if (n < 0x10) {
