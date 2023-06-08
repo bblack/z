@@ -34,7 +34,6 @@ input.addEventListener("change", function() {
 	log(`received file ${file.name} of size ${file.size} bytes`);
 
 	file.arrayBuffer().then((ab) => {
-		//debugger;
 		log(`Read ${ab.byteLength} bytes`);
 
 		dv = new DataView(ab);
@@ -123,6 +122,9 @@ function executeNextInstruction(dv) {
     case 116:
       ops.add(operands);
       break;
+		case 140:
+			ops.jump(operands);
+			break;
     case 160:
       ops.jz_var(operands);
       break;
@@ -147,7 +149,6 @@ function executeNextInstruction(dv) {
 
 const ops = {
 	loadw: function(operands) {
-		debugger;
 		var arrayAddress = operands[0];
 		var elementIndex = operands[1];
 		var resultVar = readPC();
@@ -340,6 +341,16 @@ const ops = {
 		// 1.
 		writeVar(topFrame.storeVariable, returnValue);
 		pc = topFrame.returnAddress;
+	},
+	jump: function(operands) {
+		// unconditional jump. not a "branch"; op0 is the destination offset:
+		var offset = operands[0];
+		if (offset & 0x8000) {
+			// it was pulled from the DataView as an unsigned 16-bit value, but
+			// it's a signed 16-bit value; negate it properly:
+			offset -= 0x10000;
+		}
+		pc += (offset - 2);
 	}
 };
 
