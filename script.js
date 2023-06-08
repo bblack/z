@@ -100,24 +100,28 @@ function executeNextInstruction(dv) {
 			operands = readOperandsShort(firstByte);
 			break;
 		default: // long
+			operands = readOperandsLong(firstByte);
 			break;
 	}
 
   // opcodes by name: https://inform-fiction.org/zmachine/standards/z1point1/sect15.html
   // opcodes by number: https://inform-fiction.org/zmachine/standards/z1point1/sect14.html
   switch (opcode) {
+		case 79:
+			ops.loadw(operands);
+			break;
     case 84:
       // add a b -> (result); a is a 'var', b is a 'small constant'
-      ops.add_var_small();
+      ops.add(operands);
       break;
     case 85:
-      ops.sub_var_small(); // i guess?
+      ops.sub(operands);
       break;
     case 97:
-      ops.je_var_var();
+      ops.je(operands);
       break;
     case 116:
-      ops.add_var_var();
+      ops.add(operands);
       break;
     case 160:
       ops.jz_var(operands);
@@ -142,6 +146,16 @@ function executeNextInstruction(dv) {
 }
 
 const ops = {
+	loadw: function(operands) {
+		debugger;
+		var arrayAddress = operands[0];
+		var elementIndex = operands[1];
+		var resultVar = readPC();
+		var elementAddress = arrayAddress + (2 * elementIndex);
+		var word = dv.getUint16(elementAddress, false);
+
+		writeVar(resultVar, word);
+	},
 	call: function() {
 		var operands = readOperandsVAR();
     var storeVariable = readPC();
@@ -224,21 +238,14 @@ const ops = {
     // throw "opcode 'call' is recognized but not yet supported";
     // debugger;
   },
-  add_var_small: function() {
-    var a = readVar(readPC());
-    var b = readPC();
-    var resultVar = readPC();
+	add: function(operands) {
+		var a = operands[0];
+		var b = operands[1];
+		var resultVar = readPC();
 
-    writeVar(resultVar, a + b);
-  },
-  add_var_var: function() {
-    var a = readVar(readPC());
-    var b = readVar(readPC());
-    var resultVar = readPC();
-
-    writeVar(resultVar, a + b);
-  },
-  je_var_var: function() {
+		writeVar(resultVar, a + b);
+	},
+  je: function(operands) {
   	// je a b ?(label)
     // that is: check whether a == b. (that is, compare the VALUES in VARS a and b.)
     // what to do with the result depends on the byte after b:
@@ -247,8 +254,8 @@ const ops = {
     // relative to the current... instruction?
 
 		// TODO: still dry this up more better across jump instructions!
-    var a = readVar(readPC());
-    var b = readVar(readPC());
+    var a = operands[0];
+    var b = operands[1];
     var branchInfo1 = readPC();
 		var branchInfo2; // sometimes present; presence given by a bit in prior byte
 		var offset;
@@ -306,9 +313,9 @@ const ops = {
 			pc += (offset - 2);
 		}
   },
-  sub_var_small: function() {
-    var a = readVar(readPC());
-    var b = readPC();
+  sub: function(operands) {
+    var a = operands[0];
+    var b = operands[1];
     var resultVar = readPC();
 
     writeVar(resultVar, a - b);
@@ -357,6 +364,22 @@ function readOperandsShort(firstByte) {
 		default: // 1OP
 			return [readNextOperand(operandType)];
 	}
+}
+
+function readOperandsLong(firstByte) {
+	// 4.3.2
+	// In long form the operand count is always 2OP. The opcode number is given in the bottom 5 bits.
+	// 4.4.2
+	// In long form, bit 6 of the opcode gives the type of the first operand, bit 5 of the second. A value of 0 means a small constant and 1 means a variable. (If a 2OP instruction needs a large constant as operand, then it should be assembled in variable rather than long form.)
+	var operandTypes = [
+		(firstByte & 0b0100_0000) ? 0b10 : 0b01,
+		(firstByte & 0b0010_0000) ? 0b10 : 0b01
+	];
+	var operands = [
+		readNextOperand(operandTypes[0]),
+		readNextOperand(operandTypes[1])
+	];
+	return operands;
 }
 
 function readOperandsVAR() {
