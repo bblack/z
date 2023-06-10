@@ -136,14 +136,11 @@ function readString(addr) {
 	var abbrevPage = 0;
 
 	while (true) {
-		// TODO: just get 1 16 bit val
-		var byte0 = dv.getUint8(addr);
-		addr++;
-		var byte1 = dv.getUint8(addr);
-		addr++;
-		var c0 = (byte0 & 0b0111_1100) >> 2;
-		var c1 = ((byte0 & 0b0000_0011) << 3) | ((byte1 & 0b1110_0000) >> 5);
-		var c2 = (byte1 & 0b0001_1111);
+		var word = dv.getUint16(addr);
+		addr += 2;
+		var c0 = (word & 0b0111_1100_0000_0000) >> 10;
+		var c1 = (word & 0b0000_0011_1110_0000) >> 5;
+		var c2 = (word & 0b0000_0000_0001_1111);
 
 		[c0, c1, c2].forEach((c) => {
 			if (abbrevPage > 0) {
@@ -196,7 +193,7 @@ function readString(addr) {
 			}
 		});
 
-		if (byte0 & 0b1000_0000) {
+		if (word & 0b1000_0000_0000_0000) {
 			return s;
 		}
 	}
