@@ -27,6 +27,12 @@ var callStack = [
 	}
 ];
 
+const alphabets = [
+	new Array(6).fill(undefined).concat('abcdefghijklmnopqrstuvwxyz'.split('')),
+	new Array(6).fill(undefined).concat('ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')),
+	new Array(6).fill(undefined).concat(' \n0123456789.,!?_#\'"/\-:()'.split('')),
+];
+
 var input = document.querySelector("input#file")
 
 input.addEventListener("change", function() {
@@ -41,10 +47,10 @@ input.addEventListener("change", function() {
 		// https://inform-fiction.org/zmachine/standards/z1point1/sect11.html
 
 		var version = dv.getUint8(0x00, false);
-		log("Version: " + version);
+		log("  Version: " + version);
 
 		var flags = dv.getUint16(0x01, false);
-		log("Flags: ");
+		log("  Flags: ");
 
 		var statusLineType = flags & 0x01;
 		switch (statusLineType) {
@@ -73,12 +79,130 @@ input.addEventListener("change", function() {
 		var storyFileLength = dv.getUint16(0x1a, false);
 		log(`Story file length: ${storyFileLength} words (${storyFileLength * 2} bytes)`);
 
+		logObjectTable(dv);
+
 		// and away we go:
     while (true) {
       executeNextInstruction(dv);
     }
 	});
 });
+
+function logObjectTable(dv) {
+	var addr = dv.getUint16(0x0a, false);
+	log(`  Object table location: ${addr}`);
+
+	log(`  Property defaults:`);
+	// says it has 31 words, not 32, idk
+	for (var i = 0; i < 31; i += 1) {
+		log(`    ${i}. ${dv.getUint16(addr, false)}`);
+		addr += 2;
+	}
+
+	log(`  Objects:`);
+	for (var i = 0; i < 256; i += 1) {
+		var attrFlags = dv.getUint32(addr, false);
+		var parentId = dv.getUint8(addr + 4, false);
+		var siblingId = dv.getUint8(addr + 5, false);
+		var childId = dv.getUint8(addr + 6, false);
+		var propertiesAddr = dv.getUint16(addr + 7, false);
+
+		// 12.3
+		// Objects are numbered consecutively from 1 upward, with object number 0 being used to mean "nothing" (though there is formally no such object).
+		log(`    ${i + 1}.`)
+		log(`      attrFlags: ${attrFlags.toString(2).padStart(32, '0')}`);
+		log(`      parentId: ${parentId}`);
+		log(`      siblingId: ${siblingId}`);
+		log(`      childId: ${childId}`);
+		log(`      propertiesAddr: ${propertiesAddr.toString(16).padStart(4, '0')}`);
+		log(`      properties table:`)
+
+		// unsure whether we actually need the length?
+		var shortNameLength = dv.getUint8(propertiesAddr, false);
+		var shortNameBytePtr = propertiesAddr + 1;
+		var shortName = readString(shortNameBytePtr);
+
+		log(`        name: ${shortName}`);
+
+		// TODO: rest of properties
+
+		addr += 9;
+	}
+}
+
+function readString(addr) {
+	var s = "";
+	var alphabet = 0;
+	var abbrevPage = 0;
+
+	while (true) {
+		// TODO: just get 1 16 bit val
+		var byte0 = dv.getUint8(addr);
+		addr++;
+		var byte1 = dv.getUint8(addr);
+		addr++;
+		var c0 = (byte0 & 0b0111_1100) >> 2;
+		var c1 = ((byte0 & 0b0000_0011) << 3) | ((byte1 & 0b1110_0000) >> 5);
+		var c2 = (byte1 & 0b0001_1111);
+
+		[c0, c1, c2].forEach((c) => {
+			if (abbrevPage > 0) {
+				var abbrevTableAddr = dv.getUint16(0x18, false);
+				//  "...the interpreter must look up entry 32(z-1)+x in the abbreviations table and print the string at that word address"
+				var abbrevTableEntryNum = 32 * (abbrevPage - 1) + c;
+				// entries are 2 bytes i guess, since they contain addresses...
+				var abbrevTableEntry = abbrevTableAddr + 2 * abbrevTableEntryNum;
+				// ...and then i guess because they're WORD addresses, we must double
+				// to get the BYTE address:
+				var abbrevAddr = dv.getUint16(abbrevTableEntry, false) * 2;
+				var abbrev = readString(abbrevAddr);
+
+				s += abbrev;
+				abbrevPage = 0;
+
+				return;
+			}
+
+			// 3.2.3
+			// In Versions 3 and later, the current alphabet is always A0 unless changed for 1 character only: Z-characters 4 and 5 are shift characters.
+			// TODO: handle each of 0-5 properly
+			// TODO: newlines
+			// TODO: A2-0x06 ten bit thing
+			switch (c) {
+				case 0:
+					// 3.5.1
+					// The Z-character 0 is printed as a space (ZSCII 32).
+					s += " ";
+					break;
+				case 1:
+				case 2:
+				case 3:
+					abbrevPage = c;
+					break;
+				case 4:
+					alphabet = (alphabet + 1) % 3;
+					break;
+				case 5:
+					alphabet = (alphabet + 2) % 3;
+					break;
+				default:
+					if (alphabet == 2 && c == 6) {
+						throw "ten-bit thing not supported";
+					}
+
+					s += alphabets[alphabet][c];
+					alphabet = 0;
+					break;
+			}
+		});
+
+		if (byte0 & 0b1000_0000) {
+			return s;
+		}
+	}
+
+	return s;
+}
 
 function executeNextInstruction(dv) {
   log(`Reading next instruction, at address 0x${pc.toString(16)}`);
@@ -488,6 +612,10 @@ function log(s, color) {
 
 	console.log(outline);
 
+	// logOnPage(s);
+}
+
+function logOnPage(s) {
 	var log = document.querySelector("#log");
 	var logpane = document.querySelector("#logpane");
   var div = document.createElement('div');
@@ -497,5 +625,7 @@ function log(s, color) {
 	div.textContent = outline;
 
   log.append(div);
+
+	// this accounts for 97% of program time?
 	logpane.scrollTo(0, logpane.scrollHeight);
 }
