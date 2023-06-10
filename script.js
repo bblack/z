@@ -471,22 +471,40 @@ const ops = {
 
 		// scan the obejct's properties until we find the right one
 		while (true) {
-			debugger;
 			var propSizeByte = dv.getUint8(propAddr, false);
-			if (propSizeByte & 0b1000_0000) {
-				throw "12.4.2.1 says this means there's 2 bytes which it also says shouldn't happen in version 3";
-			}
 			// 12.4.1
 			// "the size byte is arranged as 32 times the number of data bytes minus one, plus the property number."
 			// strange way of saying:
 			// - property number given in bottom 5 bits (range 0-31)
 			// - size (bytes?) given in top 3 bits (range 0-7) - but add one to that!
 			var currentPropertyId = propSizeByte & 0b0001_1111;
-			var currentPropertySize = (propSizeByte & 0b1110_0000) + 1;
-			// var dataByteCount = propSizeByte >>
-		}
+			var currentPropertySize = ((propSizeByte & 0b1110_0000) >> 5) + 1;
 
-		throw "put_prop is not yet supported";
+			if (currentPropertyId == propertyId) {
+				// we found it
+				switch (currentPropertySize) {
+					case 1:
+						// "If the property length is 1, then the interpreter should store only the least significant byte of the value."
+						dv.setUint8(propAddr + 1, value & 0xff, false);
+						break;
+					case 2:
+						dv.setUint16(propAddr + 1, value, false);
+						break;
+					default:
+						// "As with get_prop the property length must not be more than 2: if it is, the behaviour of the opcode is undefined."
+						throw `unsupported property value size: ${currentPropertySize}`;
+				}
+				
+				return;
+			}
+
+			if (currentPropertyId == 0) {
+				// end of object's property list
+				throw `object ${objectId} does not have property ${propertyId}`;
+			}
+
+			propAddr += (1 + currentPropertySize);
+		}
 	},
 	ret: function(operands) {
 		var returnValue = operands[0];
