@@ -215,6 +215,7 @@ function executeNextInstruction(dv) {
 
 	switch ((opcode & 0b1100_0000) >> 6) { // form=?
 		case 0b11: // variable
+			operands = readOperandsVAR();
 			break;
 		case 0b10: // short
 			operands = readOperandsShort(firstByte);
@@ -253,10 +254,13 @@ function executeNextInstruction(dv) {
 			ops.ret(operands);
 			break;
     case 224:
-      ops.call();
+      ops.call(operands);
       break;
 		case 225:
-			ops.storew();
+			ops.storew(operands);
+			break;
+		case 227:
+			ops.put_prop(operands);
 			break;
     default:
       var formBits = (opcode & 0b11000000) >> 6;
@@ -278,9 +282,8 @@ const ops = {
 
 		writeVar(resultVar, word);
 	},
-	call: function() {
-		var operands = readOperandsVAR();
-    var storeVariable = readPC();
+	call: function(operands) {
+		var storeVariable = readPC();
 
     log("  store var: " + storeVariable);
 
@@ -442,15 +445,48 @@ const ops = {
 
     writeVar(resultVar, a - b);
   },
-	storew: function() {
+	storew: function(operands) {
 		// https://inform-fiction.org/zmachine/standards/z1point1/sect15.html#storew
-		var operands = readOperandsVAR();
-
 		var arrayAddress = operands[0];
 		var elementIndex = operands[1];
 		var value = operands[2];
 		var elementAddress = arrayAddress + (2 * elementIndex);
 		dv.setUint16(elementAddress, value, false);
+	},
+	put_prop: function(operands) {
+		var objectId = operands[0];
+		var propertyId = operands[1];
+		var value = operands[2];
+
+		// TODO: dry w/ logObjectTable
+		// remember, objects start from 1, not 0
+		var propAddressPtr = dv.getUint16(0x0a, false)
+			+ 31 * 2             // skip past property defaults table
+			+ (objectId - 1) * 9 // skip to the right object
+			+ 7;                 // object's properties table addr given in byte 7
+		var propAddr = dv.getUint16(propAddressPtr, false);
+		// first up is the byte giving the length of the short name (in words, not
+		// bytes), then the short name itself. skip past those:
+		propAddr += (1 + (2 * dv.getUint8(propAddr, false)));
+
+		// scan the obejct's properties until we find the right one
+		while (true) {
+			debugger;
+			var propSizeByte = dv.getUint8(propAddr, false);
+			if (propSizeByte & 0b1000_0000) {
+				throw "12.4.2.1 says this means there's 2 bytes which it also says shouldn't happen in version 3";
+			}
+			// 12.4.1
+			// "the size byte is arranged as 32 times the number of data bytes minus one, plus the property number."
+			// strange way of saying:
+			// - property number given in bottom 5 bits (range 0-31)
+			// - size (bytes?) given in top 3 bits (range 0-7) - but add one to that!
+			var currentPropertyId = propSizeByte & 0b0001_1111;
+			var currentPropertySize = (propSizeByte & 0b1110_0000) + 1;
+			// var dataByteCount = propSizeByte >>
+		}
+
+		throw "put_prop is not yet supported";
 	},
 	ret: function(operands) {
 		var returnValue = operands[0];
