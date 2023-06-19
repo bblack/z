@@ -278,6 +278,12 @@ function executeNextInstruction(dv) {
     case 187:
       ops.new_line();
       break;
+    case 201:
+      // top 2 bits are 11, so form=VAR
+      // form=VAR and next topmost bit is 0, so opcount=2OP.
+      // bottom 5 bits are 9, so...? 2OP:9, bitwise and?
+      ops.and(operands);
+      break;
     case 224:
       ops.call(operands);
       break;
