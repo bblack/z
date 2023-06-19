@@ -209,7 +209,7 @@ function executeNextInstruction(dv) {
   log(`  Found firstByte 0x${firstByte.toString(16).padStart(2, '0')} / 0b${firstByte.toString(2).padStart(8, '0')}`);
 
   var opcode = firstByte;
-  log(`  opcode is ${opcode}`);
+  log(`  opcode is ${opcode} (bottom 5 bits are ${opcode & 0b11111})`);
 
 	var operands;
 
@@ -228,7 +228,8 @@ function executeNextInstruction(dv) {
   // opcodes by name: https://inform-fiction.org/zmachine/standards/z1point1/sect15.html
   // opcodes by number: https://inform-fiction.org/zmachine/standards/z1point1/sect14.html
   switch (opcode) {
-	  case 13:
+	  case 13: 
+	  case 45:
 	 		ops.store(operands);
   		break;
 		case 79:
