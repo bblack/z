@@ -293,6 +293,9 @@ function executeNextInstruction(dv) {
     case 227:
       ops.put_prop(operands);
       break;
+    case 230:
+      ops.print_num(operands);
+      break;
     default:
       var formBits = (opcode & 0b11000000) >> 6;
       var form =
@@ -533,6 +536,19 @@ const ops = {
 
       propAddr += (1 + currentPropertySize);
     }
+  },
+  print_num: function(operands) {
+    var a = operands[0];
+
+    if (a > 0x7f) {
+      // docs say this is signed:
+      // https://www.inform-fiction.org/zmachine/standards/z1point1/sect15.html#print_num
+      // so, once we get our first negative, let's double check that:
+      debugger;
+      a = -(~(a & 0x7f) + 1);
+    }
+
+    printOutput(a.toString());
   },
   ret: function(operands) {
     var returnValue = operands[0];
