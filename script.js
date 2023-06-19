@@ -243,11 +243,12 @@ function executeNextInstruction(dv) {
     case 45:
       ops.store(operands);
       break;
-    case 16:
-      ops.loadb(operands);
-      break;
+    case 15:
     case 79:
       ops.loadw(operands);
+      break;
+    case 16:
+      ops.loadb(operands);
       break;
     case 84:
       // add a b -> (result); a is a 'var', b is a 'small constant'
