@@ -130,7 +130,7 @@ function logObjectTable(dv) {
   }
 }
 
-function readString(addr) {
+function readString(addr, onAddrAdvanced) {
   var s = "";
   var alphabet = 0;
   var abbrevPage = 0;
@@ -138,6 +138,9 @@ function readString(addr) {
   while (true) {
     var word = dv.getUint16(addr);
     addr += 2;
+    if (onAddrAdvanced) {
+      onAddrAdvanced.call(this, addr);
+    }
     var c0 = (word & 0b0111_1100_0000_0000) >> 10;
     var c1 = (word & 0b0000_0011_1110_0000) >> 5;
     var c2 = (word & 0b0000_0000_0001_1111);
@@ -194,7 +197,7 @@ function readString(addr) {
     });
 
     if (word & 0b1000_0000_0000_0000) {
-      return s;
+      break; // terminator reached
     }
   }
 
@@ -511,7 +514,7 @@ const ops = {
   print: function(operands) {
     // 0-op: "Print the quoted (literal) Z-encoded string."
     // debugger;
-    var s = readString(pc);
+    var s = readString(pc, (addr) => pc = addr);
     printOutput(s);
   },
   jump: function(operands) {
