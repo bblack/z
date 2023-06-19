@@ -228,6 +228,9 @@ function executeNextInstruction(dv) {
   // opcodes by name: https://inform-fiction.org/zmachine/standards/z1point1/sect15.html
   // opcodes by number: https://inform-fiction.org/zmachine/standards/z1point1/sect14.html
   switch (opcode) {
+	  case 13:
+	 		ops.store(operands);
+  		break;
 		case 79:
 			ops.loadw(operands);
 			break;
@@ -273,6 +276,23 @@ function executeNextInstruction(dv) {
 }
 
 const ops = {
+	store: function(operands) {
+		var varName = operands[0];
+		var value = operands[1];
+
+		// TODO: double check this?
+		// in zzo38, if op0 is 0, he REPLACES the value at atop the stack,
+		// rather than pushing onto it, which seems wrong...
+		// that's in function "xstore" which takes 2 args.
+		// but his function "store" which is analogous but takes 1 arg
+		// (and reads the var from the "special" var byte after the instruction)
+		// pushes in that case as expected. weird...
+		// i'm gonna go with pushing, which is how i read 6.3.
+		//
+		// also: vars are 16-bit values, but operand can be 8 bit, so... do we interpret
+		// values as signed and pad left with 0xf's?
+		writeVar(varName, value);
+	},
 	loadw: function(operands) {
 		var arrayAddress = operands[0];
 		var elementIndex = operands[1];
