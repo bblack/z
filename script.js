@@ -30,7 +30,7 @@ var callStack = [
 const alphabets = [
   new Array(6).fill(undefined).concat('abcdefghijklmnopqrstuvwxyz'.split('')),
   new Array(6).fill(undefined).concat('ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')),
-  new Array(6).fill(undefined).concat(' \n0123456789.,!?_#\'"/\-:()'.split('')),
+  new Array(6).fill(undefined).concat(' \n0123456789.,!?_#\'"/\\-:()'.split('')),
 ];
 
 var input = document.querySelector("input#file")
@@ -260,6 +260,9 @@ function executeNextInstruction(dv) {
       break;
     case 171:
       ops.ret(operands);
+      break;
+    case 178:
+      ops.print(operands);
       break;
     case 224:
       ops.call(operands);
@@ -505,6 +508,12 @@ const ops = {
     writeVar(topFrame.storeVariable, returnValue);
     pc = topFrame.returnAddress;
   },
+  print: function(operands) {
+    // 0-op: "Print the quoted (literal) Z-encoded string."
+    // debugger;
+    var s = readString(pc);
+    printOutput(s);
+  },
   jump: function(operands) {
     // unconditional jump. not a "branch"; op0 is the destination offset:
     var offset = operands[0];
@@ -683,6 +692,14 @@ function followJumpIf(predicate) {
   if (willJump) {
     pc += (offset - 2);
   }
+}
+
+function printOutput(s) {
+  var outputEl = document.querySelector('#stdout');
+  var div = document.createElement('div');
+
+  div.textContent = s;
+  outputEl.append(div);
 }
 
 function logOnPage(s) {
