@@ -267,6 +267,9 @@ function executeNextInstruction(dv) {
     case 178:
       ops.print(operands);
       break;
+    case 187:
+      ops.new_line();
+      break;
     case 224:
       ops.call(operands);
       break;
@@ -517,6 +520,9 @@ const ops = {
     var s = readString(pc, (addr) => pc = addr);
     printOutput(s);
   },
+  new_line: function(operands) {
+    printOutput("\n");
+  },
   jump: function(operands) {
     // unconditional jump. not a "branch"; op0 is the destination offset:
     var offset = operands[0];
@@ -699,10 +705,10 @@ function followJumpIf(predicate) {
 
 function printOutput(s) {
   var outputEl = document.querySelector('#stdout');
-  var div = document.createElement('div');
+  var span = document.createElement('span');
 
-  div.textContent = s;
-  outputEl.append(div);
+  span.textContent = s;
+  outputEl.append(span);
 }
 
 function logOnPage(s) {
