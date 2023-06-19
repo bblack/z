@@ -239,6 +239,9 @@ function executeNextInstruction(dv) {
     case 45:
       ops.store(operands);
       break;
+    case 16:
+      ops.loadb(operands);
+      break;
     case 79:
       ops.loadw(operands);
       break;
@@ -325,6 +328,15 @@ const ops = {
     // also: vars are 16-bit values, but operand can be 8 bit, so... do we interpret
     // values as signed and pad left with 0xf's?
     writeVar(varName, value);
+  },
+  loadb: function(operands) {
+    var arrayAddress = operands[0];
+    var byteOffset = operands[1];
+    var resultVar = readPC();
+    var elementAddress = arrayAddress + byteOffset;
+    var byte = dv.getUint8(elementAddress, false);
+
+    writeVar(resultVar, byte);
   },
   loadw: function(operands) {
     var arrayAddress = operands[0];
