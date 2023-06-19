@@ -228,7 +228,11 @@ function executeNextInstruction(dv) {
   // opcodes by name: https://inform-fiction.org/zmachine/standards/z1point1/sect15.html
   // opcodes by number: https://inform-fiction.org/zmachine/standards/z1point1/sect14.html
   switch (opcode) {
-    case 13: 
+    // case 10:
+    case 74:
+      ops.test_attr(operands);
+      break;
+    case 13:
     case 45:
       ops.store(operands);
       break;
@@ -277,6 +281,25 @@ function executeNextInstruction(dv) {
 }
 
 const ops = {
+  test_attr: function(operands) {
+    var objectId = operands[0];
+    var attrId = operands[1];
+
+    var objectAddr = objectAddress(objectId);
+    // each entry in object table is 9 bytes; first 4 bytes are 32 attr flags:
+    var attrFlags = dv.getUint32(objectAddr, false);
+    // this is basically right-shifting "attrId" places from the left, but
+    // that would bring in 1s instead of 0s, so:
+    var attrIsSet = attrFlags & (1 << (31 - attrId));
+
+    // NOTE: zzo calls this opcode "FSET". it calls an argless fn,
+    // flagset(), which does this odd thing: even though there are 32 attr
+    // flags, flagset() sticks makes a 16-bit mask and puts it in "op3", then
+    // records to op2 either the first 16 attr flags, or last 16, depending
+    // on which one contains the target attr. no idea why (yet).
+
+    followJumpIf(attrIsSet);
+  },
   store: function(operands) {
     var varName = operands[0];
     var value = operands[1];
@@ -380,9 +403,6 @@ const ops = {
     pc = routineAddress + 1 + (2 * routineLocalVarCount);
 
     // TODO: set pc via fn, which also logs its new value
-
-    // throw "opcode 'call' is recognized but not yet supported";
-    // debugger;
   },
   add: function(operands) {
     var a = operands[0];
@@ -398,66 +418,16 @@ const ops = {
     // (see 4.7)
     // this says it gives an OFFSET as a SIGNED 14-bit number. does that mean
     // relative to the current... instruction?
-
-    // TODO: still dry this up more better across jump instructions!
     var a = operands[0];
     var b = operands[1];
-    var branchInfo1 = readPC();
-    var branchInfo2; // sometimes present; presence given by a bit in prior byte
-    var offset;
 
-    var willJump = (a == b);
-    if ((branchInfo1 & 0b1000_0000) == 0) {
-      willJump = !willJump;
-    }
-
-    if (branchInfo1 & 0b0100_0000) { // is there a second "branch info" byte?
-      // no, only one byte - 6-bit unsigned; range [0, 63]
-      offset = (branchInfo1 & 0b0011_1111);
-    } else {
-      // yes, two bytes - 14-bit SIGNED
-      branchInfo2 = readPC();
-      offset = ((branchInfo1 & 0b0011_1111) << 8) | branchInfo2;
-
-      if (offset & 0b0010_0000_0000_0000) {
-        offset = -offset + 1;
-      }
-    }
-
-    if (willJump) {
-      pc += (offset - 2);
-    }
+    followJumpIf(a == b);
   },
   jz_var: function(operands) {
     // jump if a == 0.
-    // TODO: still dry this up more better across jump instructions!
     var a = operands[0];
-    var b = 0;
-    var branchInfo1 = readPC();
-    var branchInfo2; // sometimes present; presence given by a bit in prior byte
-    var offset;
 
-    var willJump = (a == b);
-    if ((branchInfo1 & 0b1000_0000) == 0) {
-      willJump = !willJump;
-    }
-
-    if (branchInfo1 & 0b0100_0000) { // is there a second "branch info" byte?
-      // no, only one byte - 6-bit unsigned; range [0, 63]
-      offset = (branchInfo1 & 0b0011_1111);
-    } else {
-      // yes, two bytes - 14-bit SIGNED
-      branchInfo2 = readPC();
-      offset = ((branchInfo1 & 0b0011_1111) << 8) | branchInfo2;
-
-      if (offset & 0b0010_0000_0000_0000) {
-        offset = -offset + 1;
-      }
-    }
-
-    if (willJump) {
-      pc += (offset - 2);
-    }
+    followJumpIf(a == 0);
   },
   sub: function(operands) {
     var a = operands[0];
@@ -480,11 +450,8 @@ const ops = {
     var value = operands[2];
 
     // TODO: dry w/ logObjectTable
-    // remember, objects start from 1, not 0
-    var propAddressPtr = dv.getUint16(0x0a, false)
-      + 31 * 2             // skip past property defaults table
-      + (objectId - 1) * 9 // skip to the right object
-      + 7;                 // object's properties table addr given in byte 7
+    // object's properties table addr given in byte 7
+    var propAddressPtr = objectAddress(objectId) + 7;
     var propAddr = dv.getUint16(propAddressPtr, false);
     // first up is the byte giving the length of the short name (in words, not
     // bytes), then the short name itself. skip past those:
@@ -515,7 +482,7 @@ const ops = {
             // "As with get_prop the property length must not be more than 2: if it is, the behaviour of the opcode is undefined."
             throw `unsupported property value size: ${currentPropertySize}`;
         }
-        
+
         return;
       }
 
@@ -685,6 +652,37 @@ function log(s, color) {
   console.log(outline);
 
   // logOnPage(s);
+}
+
+function objectAddress(objectId) {
+  // remember, objects start from 1, not 0
+  return dv.getUint16(0x0a, false)
+    + 31 * 2             // skip past property defaults table
+    + (objectId - 1) * 9; // skip to the right object
+}
+
+function followJumpIf(predicate) {
+  var branchInfo1 = readPC();
+  var branchInfo2;
+  var offset;
+  var willJump = ((branchInfo1 & 0b1000_0000) == 0) ? !predicate : predicate;
+
+  if (branchInfo1 & 0b0100_0000) { // is there a second "branch info" byte?
+    // no, only one byte - 6-bit unsigned; range [0, 63]
+    offset = (branchInfo1 & 0b0011_1111);
+  } else {
+    // yes, two bytes - 14-bit SIGNED
+    branchInfo2 = readPC();
+    offset = ((branchInfo1 & 0b0011_1111) << 8) | branchInfo2;
+
+    if (offset & 0b0010_0000_0000_0000) {
+      offset = -offset + 1;
+    }
+  }
+
+  if (willJump) {
+    pc += (offset - 2);
+  }
 }
 
 function logOnPage(s) {
