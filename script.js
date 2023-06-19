@@ -231,6 +231,10 @@ function executeNextInstruction(dv) {
   // opcodes by name: https://inform-fiction.org/zmachine/standards/z1point1/sect15.html
   // opcodes by number: https://inform-fiction.org/zmachine/standards/z1point1/sect14.html
   switch (opcode) {
+    // case 9:
+    case 73:
+      ops.and(operands);
+      break;
     // case 10:
     case 74:
       ops.test_attr(operands);
@@ -293,6 +297,14 @@ function executeNextInstruction(dv) {
 }
 
 const ops = {
+  and: function(operands) {
+    var a = operands[0];
+    var b = operands[1];
+    var resultVar = readPC();
+
+    // bitwise and
+    writeVar(resultVar, a & b);
+  },
   test_attr: function(operands) {
     var objectId = operands[0];
     var attrId = operands[1];
