@@ -276,6 +276,9 @@ function executeNextInstruction(dv) {
     case 171:
       ops.ret(operands);
       break;
+    case 176:
+      ops.rtrue(operands);
+      break;
     case 178:
       ops.print(operands);
       break;
@@ -574,15 +577,10 @@ const ops = {
     printOutput(a.toString());
   },
   ret: function(operands) {
-    var returnValue = operands[0];
-    var topFrame = callStack.pop();
-
-    // this fuckin fails if "storeVariable" is 0 - which means top of stack -
-    // and call stack is empty.
-    // how zzo does this shit is:
-    // 1.
-    writeVar(topFrame.storeVariable, returnValue);
-    pc = topFrame.returnAddress;
+    returnWithValue(operands[0]);
+  },
+  rtrue: function(operands) {
+    returnWithValue(1);
   },
   print: function(operands) {
     // 0-op: "Print the quoted (literal) Z-encoded string."
@@ -773,19 +771,32 @@ function followJumpIf(predicate) {
   }
 }
 
+function charFromZsciiCode(n) {
+  if (n == 0) return '';
+  if (n >= 32 && n <= 126) return String.fromCharCode(n);
+
+  throw 'unrecognized zscii code: ' + n;
+}
+
+function returnWithValue(returnValue) {
+  var topFrame = callStack.pop();
+
+  // this fuckin fails if "storeVariable" is 0 - which means top of stack -
+  // and call stack is empty.
+  // how zzo does this shit is:
+  // 1.
+  writeVar(topFrame.storeVariable, returnValue);
+  pc = topFrame.returnAddress;
+}
+
+// -- Below here: stuff that's NOT part of the z-machine --
+
 function printOutput(s) {
   var outputEl = document.querySelector('#stdout');
   var span = document.createElement('span');
 
   span.textContent = s;
   outputEl.append(span);
-}
-
-function charFromZsciiCode(n) {
-  if (n == 0) return '';
-  if (n >= 32 && n <= 126) return String.fromCharCode(n);
-
-  throw 'unrecognized zscii code: ' + n;
 }
 
 function logOnPage(s) {
