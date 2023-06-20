@@ -231,6 +231,9 @@ function executeNextInstruction(dv) {
   // opcodes by name: https://inform-fiction.org/zmachine/standards/z1point1/sect15.html
   // opcodes by number: https://inform-fiction.org/zmachine/standards/z1point1/sect14.html
   switch (opcode) {
+    case 5:
+      ops.inc_chk(operands);
+      break;
     // case 9:
     case 73:
       ops.and(operands);
@@ -248,6 +251,7 @@ function executeNextInstruction(dv) {
       ops.loadw(operands);
       break;
     case 16:
+    case 48:
       ops.loadb(operands);
       break;
     case 84:
@@ -293,6 +297,9 @@ function executeNextInstruction(dv) {
     case 227:
       ops.put_prop(operands);
       break;
+    case 229:
+      ops.print_char(operands);
+      break;
     case 230:
       ops.print_num(operands);
       break;
@@ -307,6 +314,16 @@ function executeNextInstruction(dv) {
 }
 
 const ops = {
+  inc_chk: function(operands) {
+    var varName = operands[0];
+    var threshold = operands[1];
+
+    var oldVal = readVar(varName);
+    var newVal = oldVal + 1;
+    writeVar(varName, newVal);
+
+    followJumpIf(newVal > threshold);
+  },
   and: function(operands) {
     var a = operands[0];
     var b = operands[1];
@@ -411,14 +428,14 @@ const ops = {
     var localVars = new Uint16Array(routineLocalVarCount);
     // 2. values of locals given by routine itself
     for (var i = 0; i < routineLocalVarCount; i++) {
-      localVars[i] = dv.getUint16(routineAddress + 1 + i, 0);
+      localVars[i] = dv.getUint16(routineAddress + 1 + i*2, false);
     }
     // 3. values of first N locals replaced by ARGS
-    for (var i = 0; i < routineLocalVarCount; i++) {
-      if (operands.length > i) {
-        localVars[i] = operands[i + 1];
-      }
-    }
+    var args = operands.slice(1) // skip op0, which is routine's addr
+      .slice(0, routineLocalVarCount); // don't take more args than routine has local vars
+    args.forEach((arg, i) => {
+      localVars[i] = arg;
+    });
 
     var newStackFrame = {
       returnAddress: pc,
@@ -536,6 +553,12 @@ const ops = {
 
       propAddr += (1 + currentPropertySize);
     }
+  },
+  print_char: function(operands) {
+    var n = operands[0];
+    var c = charFromZsciiCode(n);
+
+    printOutput(c);
   },
   print_num: function(operands) {
     var a = operands[0];
@@ -756,6 +779,13 @@ function printOutput(s) {
 
   span.textContent = s;
   outputEl.append(span);
+}
+
+function charFromZsciiCode(n) {
+  if (n == 0) return '';
+  if (n >= 32 && n <= 126) return String.fromCharCode(n);
+
+  throw 'unrecognized zscii code: ' + n;
 }
 
 function logOnPage(s) {
