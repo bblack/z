@@ -246,6 +246,10 @@ function executeNextInstruction(dv) {
     case 45:
       ops.store(operands);
       break;
+    // case 14:
+    case 110:
+      ops.insert_obj(operands);
+      break;
     case 15:
     case 79:
       ops.loadw(operands);
@@ -379,6 +383,46 @@ const ops = {
     var byte = dv.getUint8(elementAddress, false);
 
     writeVar(resultVar, byte);
+  },
+  insert_obj: function(operands) {
+    var srcObjectId = operands[0];
+    var destObjectId = operands[1];
+
+    // TODO: validate ids are in proper range
+    if (srcObjectId == 0) { throw 'nyi'; }
+    if (destObjectId == 0) { throw 'nyi'; }
+    if (srcObjectId > 255) { throw 'invalid'; }
+    if (destObjectId > 255) { throw 'invalid'; }
+
+    // TODO:
+    // var zobj_t = new Struct([definition])
+    // var destObj = zobj_t.at(dv, address)'
+    // TODO: dry up with logObjectTable e.g.
+    var srcObjectAddr = objectAddress(srcObjectId);
+    var destObjectAddr = objectAddress(destObjectId);
+    var oldParentId = dv.getUint8(srcObjectAddr + 4, false);
+    var oldParentAddr = objectAddr(oldParentId);
+    var oldParentFirstChildId = dv.getUint8(oldParentAddr + 6, false);
+    var oldParentFirstChildAddr = objectAddr(oldParentFirstChildId);
+    var oldParentSecondChildId = dv.getUint8(oldParentFirstChildAddr + 5, false);
+
+    // change new parent's first child:
+    dv.setUint8(destObjectAddr + 6, srcObjectId, false);
+    // TODO: point old parent's first child to old parent's first child's
+    // next sibling, if it was pointing to src; else poinnt its prev sibling to
+    // its next
+    if (oldParentFirstChildId == srcObjectId) {
+      dv.setUint8(oldParentAddr + 6, )
+    }
+
+    // change src's parent:
+    dv.setUint8(srcObjectAddr + 4, destObjectId, false);
+    // change src's next sibling to new parent's first child:
+    dv.setUint8(srcObjectAddr + 5, dv.getUint8(destObjectAddr + 6), false);
+
+    debugger;
+
+    throw 'nyi';
   },
   loadw: function(operands) {
     var arrayAddress = operands[0];
