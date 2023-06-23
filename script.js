@@ -211,28 +211,40 @@ function executeNextInstruction(dv) {
   var firstByte = readPC();
   log(`  Found firstByte 0x${firstByte.toString(16).padStart(2, '0')} / 0b${firstByte.toString(2).padStart(8, '0')}`);
 
+  var form;
+  var canonicalOpcode;
   var opcode = firstByte;
-  log(`  opcode is ${opcode} (bottom 5 bits are ${opcode & 0b11111})`);
-
   var operands;
 
   switch ((opcode & 0b1100_0000) >> 6) { // form=?
     case 0b11: // variable
+      form = 'var';
+      canonicalOpcode = firstByte & 0b1_1111;
       operands = readOperandsVAR();
       break;
     case 0b10: // short
+      form = 'short';
+      canonicalOpcode = firstByte & 0b1111;
       operands = readOperandsShort(firstByte);
       break;
     default: // long
+      form = 'long';
+      canonicalOpcode = firstByte & 0b1_1111;
       operands = readOperandsLong(firstByte);
       break;
   }
+
+  log(`  form=${form}; canonicalOpcode=${canonicalOpcode}`);
 
   // opcodes by name: https://inform-fiction.org/zmachine/standards/z1point1/sect15.html
   // opcodes by number: https://inform-fiction.org/zmachine/standards/z1point1/sect14.html
   switch (opcode) {
     case 5:
       ops.inc_chk(operands);
+      break;
+    // case 6:
+    case 70:
+      ops.jin(operands);
       break;
     // case 9:
     case 73:
@@ -241,6 +253,10 @@ function executeNextInstruction(dv) {
     // case 10:
     case 74:
       ops.test_attr(operands);
+      break;
+    // case 11:
+    case 75:
+      ops.set_attr(operands);
       break;
     case 13:
     case 45:
@@ -258,6 +274,10 @@ function executeNextInstruction(dv) {
     case 48:
       ops.loadb(operands);
       break;
+    // case 17:
+    case 81:
+      ops.get_prop(operands);
+      break;
     case 84:
       // add a b -> (result); a is a 'var', b is a 'small constant'
       ops.add(operands);
@@ -271,11 +291,18 @@ function executeNextInstruction(dv) {
     case 116:
       ops.add(operands);
       break;
+    // case 138:
+    case 170:
+      ops.print_object(operands);
+      break;
     case 140:
       ops.jump(operands);
       break;
     case 160:
       ops.jz_var(operands);
+      break;
+    case 163:
+      ops.get_parent(operands);
       break;
     case 171:
       ops.ret(operands);
@@ -310,13 +337,14 @@ function executeNextInstruction(dv) {
     case 230:
       ops.print_num(operands);
       break;
+    case 232:
+      ops.push(operands);
+      break;
+    case 233:
+      ops.pull(operands);
+      break;
     default:
-      var formBits = (opcode & 0b11000000) >> 6;
-      var form =
-        formBits == 0b11 ? 'variable' :
-        formBits == 0b10 ? 'short' :
-        'long';
-      throw `unsupported opcode ${opcode}; form is ${form}; bottom 5 bits are ${opcode & 0b11111}`;
+      throw `unsupported opcode ${opcode}`;
   }
 }
 
@@ -330,6 +358,15 @@ const ops = {
     writeVar(varName, newVal);
 
     followJumpIf(newVal > threshold);
+  },
+  jin: function(operands) {
+    var obj1Id = operands[0];
+    var obj2Id = operands[1];
+
+    var obj1Addr = objectAddress(obj1Id);
+    var objectIsChildOfObject = dv.getUint8(obj1Addr + 4, false) == obj2Id;
+
+    followJumpIf(objectIsChildOfObject);
   },
   and: function(operands) {
     var a = operands[0];
@@ -358,6 +395,16 @@ const ops = {
 
     followJumpIf(attrIsSet);
   },
+  set_attr(operands) {
+    var objectId = operands[0];
+    var attrId = operands[1];
+
+    var objectAddr = objectAddress(objectId);
+    var attrFlags = dv.getUint32(objectAddr, false);
+    var newAttrFlags = attrFlags | (1 << (31 - attrId));
+
+    dv.setUint32(objectAddr, newAttrFlags, false);
+  },
   store: function(operands) {
     var varName = operands[0];
     var value = operands[1];
@@ -384,45 +431,126 @@ const ops = {
 
     writeVar(resultVar, byte);
   },
+  get_prop: function(operands) {
+    var objectId = operands[0];
+    var propertyId = operands[1];
+    var resultVar = readPC();
+
+    // Read property from object (resulting in the default value if it had no such declared property). If the property has length 1, the value is only that byte. If it has length 2, the first two bytes of the property are taken as a word value. It is illegal for the opcode to be used if the property has length greater than 2, and the result is unspecified.
+    var propValue;
+
+    // TODO: dry with put_prop
+    // object's properties table addr given in byte 7
+    var propAddressPtr = objectAddress(objectId) + 7;
+    var propTableAddr = dv.getUint16(propAddressPtr, false);
+    var propAddr = propTableAddr; // we'll be incrementing this
+    // first up is the byte giving the length of the short name (in words, not
+    // bytes), then the short name itself. skip past those:
+    propAddr += (1 + (2 * dv.getUint8(propAddr, false)));
+
+    // scan the obejct's properties until we find the right one
+    while (true) {
+      var propSizeByte = dv.getUint8(propAddr, false);
+      // 12.4.1
+      // "the size byte is arranged as 32 times the number of data bytes minus one, plus the property number."
+      // strange way of saying:
+      // - property number given in bottom 5 bits (range 0-31)
+      // - size (bytes?) given in top 3 bits (range 0-7) - but add one to that!
+      var currentPropertyId = propSizeByte & 0b0001_1111;
+      var currentPropertySize = ((propSizeByte & 0b1110_0000) >> 5) + 1;
+
+      if (currentPropertyId == propertyId) {
+        // we found it
+        switch (currentPropertySize) {
+          // If the property has length 1, the value is only that byte. If it has length 2, the first two bytes of the property are taken as a word value.
+          // It is illegal for the opcode to be used if the property has length greater than 2, and the result is unspecified.
+          case 1:
+            propValue = dv.getUint8(propAddr + 1, false);
+            break;
+          case 2:
+            propValue = dv.getUint16(propAddr + 1, false);
+            break;
+          default:
+            throw `unsupported property value size: ${currentPropertySize}`;
+        }
+      }
+
+      if (currentPropertyId == 0) {
+        // end of object's property list; take the default:
+        if (propertyId > 31) {
+          throw "obj lacked property " + propertyId + "but you can't have a default value for a property with that id";
+        }
+        propValue = dv.getUint16(propTableAddr + 2 * (propertyId - 1));
+        break;
+      }
+
+      propAddr += (1 + currentPropertySize);
+    }
+
+    writeVar(resultVar, propValue); // i guess?
+  },
   insert_obj: function(operands) {
-    var srcObjectId = operands[0];
-    var destObjectId = operands[1];
+    var targetId = operands[0];
+    var newParentId = operands[1];
 
     // TODO: validate ids are in proper range
-    if (srcObjectId == 0) { throw 'nyi'; }
-    if (destObjectId == 0) { throw 'nyi'; }
-    if (srcObjectId > 255) { throw 'invalid'; }
-    if (destObjectId > 255) { throw 'invalid'; }
+    if (targetId == 0) { throw 'nyi'; }
+    if (newParentId == 0) { throw 'nyi'; }
+    if (targetId > 255) { throw 'invalid'; }
+    if (newParentId > 255) { throw 'invalid'; }
+
 
     // TODO:
     // var zobj_t = new Struct([definition])
     // var destObj = zobj_t.at(dv, address)'
     // TODO: dry up with logObjectTable e.g.
-    var srcObjectAddr = objectAddress(srcObjectId);
-    var destObjectAddr = objectAddress(destObjectId);
-    var oldParentId = dv.getUint8(srcObjectAddr + 4, false);
-    var oldParentAddr = objectAddr(oldParentId);
+    var targetAddr = objectAddress(targetId);
+    var newParentAddr = objectAddress(newParentId);
+
+    // TODO: properly handle "old parent = null"
+    var oldParentId = dv.getUint8(targetAddr + 4, false);
+    var oldParentAddr = objectAddress(oldParentId);
     var oldParentFirstChildId = dv.getUint8(oldParentAddr + 6, false);
-    var oldParentFirstChildAddr = objectAddr(oldParentFirstChildId);
+    var oldParentFirstChildAddr = objectAddress(oldParentFirstChildId);
     var oldParentSecondChildId = dv.getUint8(oldParentFirstChildAddr + 5, false);
 
+    // change src's parent:
+    dv.setUint8(targetAddr + 4, newParentId, false);
+    // change src's next sibling to new parent's first child:
+    dv.setUint8(targetAddr + 5, dv.getUint8(newParentAddr + 6), false);
+
     // change new parent's first child:
-    dv.setUint8(destObjectAddr + 6, srcObjectId, false);
-    // TODO: point old parent's first child to old parent's first child's
+    dv.setUint8(newParentAddr + 6, targetId, false);
+    // point old parent's first child to old parent's first child's
     // next sibling, if it was pointing to src; else poinnt its prev sibling to
     // its next
-    if (oldParentFirstChildId == srcObjectId) {
-      dv.setUint8(oldParentAddr + 6, )
+    if (oldParentFirstChildId == targetId) {
+      dv.setUint8(oldParentAddr + 6, oldParentSecondChildId, false);
+    } else {
+      var currentSiblingId = oldParentFirstChildId;
+      var currentSiblingAddr;
+      var nextSiblingId;
+      var nextSiblingAddr;
+      var childAfterNextId;
+
+      while (true) {
+        currentSiblingAddr = objectAddress(currentSiblingId);
+        nextSiblingId = dv.getUint8(currentSiblingAddr + 5, false);
+
+        if (nextSiblingId == targetId) {
+          // if the next sibling is "src", point this to the one after:
+          nextSiblingAddr = objectAddress(nextSiblingId);
+          childAfterNextId = dv.getUint8(nextSiblingAddr + 5, false);
+          dv.setUint8(currentSiblingAddr + 5, childAfterNextId, false);
+          break;
+        } else if (nextSiblingId == 0) {
+          // if the next sibling is null, we're at the end.
+          break;
+        } else {
+          currentSiblingId = nextSiblingId;
+        }
+      }
     }
-
-    // change src's parent:
-    dv.setUint8(srcObjectAddr + 4, destObjectId, false);
-    // change src's next sibling to new parent's first child:
-    dv.setUint8(srcObjectAddr + 5, dv.getUint8(destObjectAddr + 6), false);
-
-    debugger;
-
-    throw 'nyi';
   },
   loadw: function(operands) {
     var arrayAddress = operands[0];
@@ -557,6 +685,7 @@ const ops = {
     var value = operands[2];
 
     // TODO: dry w/ logObjectTable
+    // TODO: dry w/ get_prop
     // object's properties table addr given in byte 7
     var propAddressPtr = objectAddress(objectId) + 7;
     var propAddr = dv.getUint16(propAddressPtr, false);
@@ -620,6 +749,23 @@ const ops = {
 
     printOutput(a.toString());
   },
+  push: function(operands) {
+    var value = operands[0];
+    writeVar(0, value);
+  },
+  pull: function(operands) {
+    var value = readVar(0);
+    writeVar(operands[0], value);
+  },
+  get_parent: function(operands) {
+    var objectId = operands[0];
+    var resultVar = readPC();
+
+    var objectAddr = objectAddress(objectId);
+    var parentId = dv.getUint8(objectAddr + 4, false);
+
+    writeVar(resultVar, parentId);
+  },
   ret: function(operands) {
     returnWithValue(operands[0]);
   },
@@ -634,6 +780,16 @@ const ops = {
   },
   new_line: function(operands) {
     printOutput("\n");
+  },
+  print_object: function(operands) {
+    // TODO validate obj id
+    var objectId = operands[0];
+    var objectAddr = objectAddress(objectId);
+    // TODO: dry w/ logObjectTable via struct:
+    var propertiesAddr = dv.getUint16(objectAddr + 7, false);
+    var shortNameBytePtr = propertiesAddr + 1;
+    var shortName = readString(shortNameBytePtr);
+    printOutput(shortName);
   },
   jump: function(operands) {
     // unconditional jump. not a "branch"; op0 is the destination offset:
@@ -731,7 +887,9 @@ function readNextOperand(operandType) {
 
 function readVar(n) {
   if (n == 0) {
-    return topCallStackFrame().substack.pop();
+    var stack = topCallStackFrame().substack;
+    if (stack.length == 0) { throw "illegal to pop empty stack"; }
+    return stack.pop();
   }
 
   if (n < 0x10) {
