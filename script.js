@@ -868,7 +868,7 @@ function readOperandsVAR() {
   var operandIndex = 0;
 
   while (true) {
-    if (operandIndex > operandTypes.length) break;
+    if (operandIndex >= operandTypes.length) break;
 
     var operandType = operandTypes[operandIndex];
 
