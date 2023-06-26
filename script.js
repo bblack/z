@@ -986,6 +986,7 @@ function followJumpIf(predicate) {
       // 4.7.1
       // An offset of 0 means "return false from the current routine", and 1 means "return true from the current routine".
       returnWithValue(offset);
+      return;
     }
 
     pc += (offset - 2);
