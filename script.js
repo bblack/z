@@ -245,6 +245,10 @@ function executeNextInstruction(dv) {
     case 193: // var form
       ops.je(operands);
       break;
+    // case 2:
+    case 66:
+      ops.jl(operands);
+      break;
     case 5:
       ops.inc_chk(operands);
       break;
@@ -709,6 +713,23 @@ const ops = {
     // check if a == ANY other operands.
     // in var mode there can be more than just a, b
     followJumpIf(operands.slice(1).some((b) => a == b));
+  },
+  jl: function(operands) {
+    // Jump if a < b (using a signed 16-bit comparison).
+    var a = operands[0];
+    var b = operands[1];
+
+    if (a > 0x7fff) {
+      debugger;
+      a = 1 - (a & 0x7fff);
+    }
+
+    if (b > 0x7fff) {
+      debugger;
+      b = 1 - (b & 0x7fff);
+    }
+
+    followJumpIf(a < b);
   },
   print_paddr(operands) {
     var packedAddr = operands[0];
