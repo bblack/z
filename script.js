@@ -134,6 +134,8 @@ function readString(addr, onAddrAdvanced) {
   var s = "";
   var alphabet = 0;
   var abbrevPage = 0;
+  var zsciiDirect = 0;
+  var zsciiBits = 0;
 
   while (true) {
     var word = dv.getUint16(addr);
@@ -146,6 +148,16 @@ function readString(addr, onAddrAdvanced) {
     var c2 = (word & 0b0000_0000_0001_1111);
 
     [c0, c1, c2].forEach((c) => {
+      if (zsciiDirect > 0) {
+        zsciiBits = (zsciiBits << 5) | c;
+        zsciiDirect -= 1;
+        if (zsciiDirect == 0) {
+          s += charFromZsciiCode(zsciiBits);
+          zsciiBits = 0;
+        }
+        return;
+      }
+
       if (abbrevPage > 0) {
         var abbrevTableAddr = dv.getUint16(0x18, false);
         //  "...the interpreter must look up entry 32(z-1)+x in the abbreviations table and print the string at that word address"
@@ -187,10 +199,11 @@ function readString(addr, onAddrAdvanced) {
           break;
         default:
           if (alphabet == 2 && c == 6) {
-            throw "ten-bit thing not supported";
+            zsciiDirect = 2;
+          } else {
+            s += alphabets[alphabet][c];
           }
 
-          s += alphabets[alphabet][c];
           alphabet = 0;
           break;
       }
@@ -210,6 +223,8 @@ function executeNextInstruction(dv) {
   // https://www.inform-fiction.org/zmachine/standards/z1point1/sect04.html
   var firstByte = readPC();
   log(`  Found firstByte 0x${firstByte.toString(16).padStart(2, '0')} / 0b${firstByte.toString(2).padStart(8, '0')}`);
+
+  log(`0x${(pc-1).toString(16).padStart(4, '0')}: ${firstByte}`);
 
   var form;
   var canonicalOpcode;
