@@ -242,6 +242,7 @@ function executeNextInstruction(dv) {
     // case 1:
     case 65:
     case 97:
+    case 193: // var form
       ops.je(operands);
       break;
     case 5:
@@ -293,6 +294,14 @@ function executeNextInstruction(dv) {
     case 116:
       ops.add(operands);
       break;
+    // case 129:
+    case 161:
+      ops.get_sibling(operands);
+      break;
+    // case 130:
+    case 162:
+      ops.get_child(operands);
+      break;
     // case 138:
     case 170:
       ops.print_object(operands);
@@ -317,8 +326,14 @@ function executeNextInstruction(dv) {
     case 176:
       ops.rtrue(operands);
       break;
+    case 177:
+      ops.rfalse(operands);
+      break;
     case 178:
       ops.print(operands);
+      break;
+    case 184:
+      ops.ret_popped(operands);
       break;
     case 187:
       ops.new_line();
@@ -652,6 +667,26 @@ const ops = {
 
     writeVar(resultVar, a + b);
   },
+  get_sibling: function(operands) {
+    var objectId = operands[0];
+    var resultVar = readPC();
+
+    var objectAddr = objectAddress(objectId);
+    var siblingId = dv.getUint8(objectAddr + 5, false);
+
+    writeVar(resultVar, siblingId);
+    followJumpIf(siblingId != 0);
+  },
+  get_child: function(operands) {
+    var objectId = operands[0];
+    var resultVar = readPC();
+
+    var objectAddr = objectAddress(objectId);
+    var childId = dv.getUint8(objectAddr + 6, false);
+
+    writeVar(resultVar, childId);
+    followJumpIf(childId != 0);
+  },
   je: function(operands) {
     // je a b ?(label)
     // that is: check whether a == b. (that is, compare the VALUES in VARS a and b.)
@@ -660,9 +695,10 @@ const ops = {
     // this says it gives an OFFSET as a SIGNED 14-bit number. does that mean
     // relative to the current... instruction?
     var a = operands[0];
-    var b = operands[1];
 
-    followJumpIf(a == b);
+    // check if a == ANY other operands.
+    // in var mode there can be more than just a, b
+    followJumpIf(operands.slice(1).some((b) => a == b));
   },
   print_paddr(operands) {
     var packedAddr = operands[0];
@@ -786,11 +822,17 @@ const ops = {
   rtrue: function(operands) {
     returnWithValue(1);
   },
+  rfalse: function(operands) {
+    returnWithValue(0);
+  },
   print: function(operands) {
     // 0-op: "Print the quoted (literal) Z-encoded string."
     // debugger;
     var s = readString(pc, (addr) => pc = addr);
     printOutput(s);
+  },
+  ret_popped: function(operands) {
+    returnWithValue(readVar(0));
   },
   new_line: function(operands) {
     printOutput("\n");
