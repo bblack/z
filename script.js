@@ -239,6 +239,11 @@ function executeNextInstruction(dv) {
   // opcodes by name: https://inform-fiction.org/zmachine/standards/z1point1/sect15.html
   // opcodes by number: https://inform-fiction.org/zmachine/standards/z1point1/sect14.html
   switch (opcode) {
+    // case 1:
+    case 65:
+    case 97:
+      ops.je(operands);
+      break;
     case 5:
       ops.inc_chk(operands);
       break;
@@ -285,9 +290,6 @@ function executeNextInstruction(dv) {
     case 85:
       ops.sub(operands);
       break;
-    case 97:
-      ops.je(operands);
-      break;
     case 116:
       ops.add(operands);
       break;
@@ -298,8 +300,13 @@ function executeNextInstruction(dv) {
     case 140:
       ops.jump(operands);
       break;
+    // case 141:
+    case 173:
+      break;
+      ops.print_paddr(operands);
+      break;
     case 160:
-      ops.jz_var(operands);
+      ops.jz(operands);
       break;
     case 163:
       ops.get_parent(operands);
@@ -657,7 +664,14 @@ const ops = {
 
     followJumpIf(a == b);
   },
-  jz_var: function(operands) {
+  print_paddr(operands) {
+    var packedAddr = operands[0];
+    var addr = packedAddr * 2;
+    debugger;
+    var s = readString(addr);
+    printOutput(s);
+  },
+  jz: function(operands) {
     // jump if a == 0.
     var a = operands[0];
 
@@ -968,6 +982,12 @@ function followJumpIf(predicate) {
   }
 
   if (willJump) {
+    if (offset == 0 || offset == 1) {
+      // 4.7.1
+      // An offset of 0 means "return false from the current routine", and 1 means "return true from the current routine".
+      returnWithValue(offset);
+    }
+
     pc += (offset - 2);
   }
 }
