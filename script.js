@@ -461,18 +461,17 @@ const ops = {
 
       if (currentPropertyId == propertyId) {
         // we found it
-        switch (currentPropertySize) {
-          // If the property has length 1, the value is only that byte. If it has length 2, the first two bytes of the property are taken as a word value.
-          // It is illegal for the opcode to be used if the property has length greater than 2, and the result is unspecified.
-          case 1:
-            propValue = dv.getUint8(propAddr + 1, false);
-            break;
-          case 2:
-            propValue = dv.getUint16(propAddr + 1, false);
-            break;
-          default:
-            throw `unsupported property value size: ${currentPropertySize}`;
+        // If the property has length 1, the value is only that byte. If it has length 2, the first two bytes of the property are taken as a word value.
+        // It is illegal for the opcode to be used if the property has length greater than 2, and the result is unspecified.
+        if (currentPropertySize == 1) {
+          propValue = dv.getUint8(propAddr + 1, false);
+        } else if (currentPropertySize == 2) {
+          propValue = dv.getUint16(propAddr + 1, false);
+        } else {
+          throw `unsupported property value size: ${currentPropertySize}`;
         }
+
+        break;
       }
 
       if (currentPropertyId == 0) {
