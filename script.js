@@ -89,7 +89,7 @@ input.addEventListener("change", function() {
 });
 
 function logObjectTable(dv) {
-  var addr = dv.getUint16(0x0a, false);
+  var addr = objectTableAddress();
   log(`  Object table location: ${addr}`);
 
   log(`  Property defaults:`);
@@ -486,7 +486,7 @@ const ops = {
         if (propertyId > 31) {
           throw "obj lacked property " + propertyId + "but you can't have a default value for a property with that id";
         }
-        propValue = dv.getUint16(propTableAddr + 2 * (propertyId - 1));
+        propValue = defaultPropertyValue(propertyId);
         break;
       }
 
@@ -717,19 +717,20 @@ const ops = {
       var currentPropertyId = propSizeByte & 0b0001_1111;
       var currentPropertySize = ((propSizeByte & 0b1110_0000) >> 5) + 1;
 
+      // TODO we REALLY need to dry this up so we don't keep having to fix
+      // everything twice
       if (currentPropertyId == propertyId) {
         // we found it
-        switch (currentPropertySize) {
-          case 1:
-            // "If the property length is 1, then the interpreter should store only the least significant byte of the value."
-            dv.setUint8(propAddr + 1, value & 0xff, false);
-            break;
-          case 2:
-            dv.setUint16(propAddr + 1, value, false);
-            break;
-          default:
-            // "As with get_prop the property length must not be more than 2: if it is, the behaviour of the opcode is undefined."
-            throw `unsupported property value size: ${currentPropertySize}`;
+        if (currentPropertySize == 1) {
+          // "If the property length is 1, then the interpreter should store only the least significant byte of the value."
+          dv.setUint8(propAddr + 1, value & 0xff, false);
+          break;
+        } else if (currentPropertySize == 2) {
+          dv.setUint16(propAddr + 1, value, false);
+          break;
+        } else {
+          // "As with get_prop the property length must not be more than 2: if it is, the behaviour of the opcode is undefined."
+          throw `unsupported property value size: ${currentPropertySize}`;
         }
 
         return;
@@ -957,9 +958,17 @@ function log(s, color) {
 
 function objectAddress(objectId) {
   // remember, objects start from 1, not 0
-  return dv.getUint16(0x0a, false)
+  return objectTableAddress()
     + 31 * 2             // skip past property defaults table
     + (objectId - 1) * 9; // skip to the right object
+}
+
+function defaultPropertyValue(propertyId) {
+   return dv.getUint16(objectTableAddress() + 2 * (propertyId - 1));
+}
+
+function objectTableAddress() {
+  return dv.getUint16(0x0a, false);
 }
 
 function followJumpIf(predicate) {
