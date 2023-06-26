@@ -302,6 +302,10 @@ function executeNextInstruction(dv) {
     case 162:
       ops.get_child(operands);
       break;
+    // case 133:
+    case 149:
+      ops.inc(operands);
+      break;
     // case 138:
     case 170:
       ops.print_object(operands);
@@ -686,6 +690,12 @@ const ops = {
 
     writeVar(resultVar, childId);
     followJumpIf(childId != 0);
+  },
+  inc: function(operands) {
+    var varName = operands[0];
+    var value = readVar(varName);
+
+    writeVar(varName, value + 1);
   },
   je: function(operands) {
     // je a b ?(label)
