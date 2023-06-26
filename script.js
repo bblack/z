@@ -600,7 +600,12 @@ const ops = {
     var routineAddress = operands[0] * 2;
 
     if (routineAddress == 0) {
-      throw "special call to address 0 not yet implemented (see 6.4.3)";
+      // 6.4.3
+      // A routine call to packed address 0 is legal: it does nothing and returns false (0). Otherwise it is illegal to call a packed address where no routine is present.
+      // (i guess "return" above means "put into the given result var" and not
+      // "pop call stack and jump to that frame's return address")
+      writeVar(storeVariable, 0);
+      return;
     }
 
     var routineLocalVarCount = dv.getUint8(routineAddress, false);
