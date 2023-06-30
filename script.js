@@ -463,6 +463,7 @@ function executeNextInstruction(dv) {
       // add a b -> (result); a is a 'var', b is a 'small constant'
       ops.add(operands);
       break;
+    case 53:
     case 85:
       ops.sub(operands);
       break;
@@ -979,6 +980,17 @@ const ops = {
     var a = operands[0];
     var b = operands[1];
     var resultVar = readPC();
+
+    // SIGNED 16-bit subtraction, idk.
+    if (a > 0x7fff) {
+      debugger;
+      a = 1 - (a & 0x7fff);
+    }
+
+    if (b > 0x7fff) {
+      debugger;
+      b = 1 - (b & 0x7fff);
+    }
 
     writeVar(resultVar, a - b);
   },
