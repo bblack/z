@@ -16,11 +16,25 @@ body {
 }
 
 #panes .pane {
-	flex-grow: 1;
+	flex: 1 1 0;
+	/* flex-grow: 1; */
 }
 
 #panes .pane#mainpane {
+	display: flex;
+	flex-direction: column;
+}
+
+#panes .pane#mainpane>* {
 	flex-grow: 0;
+	flex-shrink: 0;
+}
+
+#panes .pane#mainpane>#stdout {
+	flex-grow: 1;
+	flex-shrink: 1;
+	overflow-y: scroll;
+	scrol
 }
 
 #panes .pane#logpane {
@@ -33,4 +47,14 @@ body {
 }
 
 #stdout {
+}
+
+input#stdin {
+	width: 100%;
+	background: #444;
+	border: none;
+	color: white;
+	caret-color: white;
+	outline: none;
+	font-family: monospace;
 }

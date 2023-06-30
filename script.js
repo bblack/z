@@ -26,6 +26,8 @@ var callStack = [
     substack: []
   }
 ];
+var textBufferAddr;
+var parseBufferAddr;
 
 const alphabets = [
   new Array(6).fill(undefined).concat('abcdefghijklmnopqrstuvwxyz'.split('')),
@@ -33,11 +35,16 @@ const alphabets = [
   new Array(6).fill(undefined).concat(' \n0123456789.,!?_#\'"/\\-:()'.split('')),
 ];
 
-var input = document.querySelector("input#file")
+// TODO: pry the z-machine apart from the html/dom stuff
+var input = document.querySelector("input#file");
+
+var AWAITING_INPUT = false;
 
 input.addEventListener("change", function() {
   var file = this.files[0];
   log(`received file ${file.name} of size ${file.size} bytes`);
+
+  document.querySelector("#stdin").focus();
 
   file.arrayBuffer().then((ab) => {
     log(`Read ${ab.byteLength} bytes`);
@@ -82,11 +89,141 @@ input.addEventListener("change", function() {
     logObjectTable(dv);
 
     // and away we go:
-    while (true) {
-      executeNextInstruction(dv);
-    }
+    readInstructionLoop();
   });
 });
+
+function zsciiCodeFromAsciiCode(n) {
+  if (n >= 32 && n <= 126) {
+    return n;
+  }
+
+  throw "mapping from ascii " + n + " to zscii not implemented (yet)";
+}
+
+// document.querySelector("#stdin").addEventListener('change', function(event) {
+document.querySelector("#stdin").addEventListener('keypress', function(event) {
+  if (event.charCode != 13) return; // "Enter"
+
+  // A sequence of characters is read in from the current input stream until a carriage return (or, in Versions 5 and later, any terminating character) is found.
+  var inputEl = event.currentTarget;
+  var s = inputEl.value;
+
+  // TODO: read esc, del, etc and convert all this to zscii chars
+  // s = stringToZsciiBuffer(s);
+
+  // docs don't say this explicitly, but i'm ASSUMING that the "text-buffer"
+  // is to be filled at this point.
+  // TODO: if so, it may be important to store them as ZSCII rather than ASCII.
+
+  // In Versions 1 to 4, byte 0 of the text-buffer should initially contain the maximum number of letters which can be typed, minus 1
+  var maxLetters = dv.getUint8(textBufferAddr, false) - 1;
+
+  // The text typed is reduced to lower case (so that it can tidily be printed back by the program if need be) and stored in bytes 1 onward
+  s = s.slice(0, maxLetters - 1).toLowerCase();
+
+  for (var i = 0; i < maxLetters; i++) {
+    var z = (i < s.length) ?
+      zsciiCodeFromAsciiCode(s.charCodeAt(i)) :
+      0;
+    dv.setUint8(textBufferAddr + i + 1, z, false);
+  }
+
+  // Initially, byte 0 of the parse-buffer should hold the maximum number of textual words which can be parsed.
+  // (If this is n, the buffer must be at least 2 + 4*n bytes long to hold the results of the analysis.)
+  const maxWords = dv.getUint8(parseBufferAddr);
+
+  // The interpreter divides the text into words
+  var words = splitCommand(s).slice(0, maxWords);
+
+  // and looks them up in the dictionary table
+  var wordEntries = lookupWords(words);
+
+  // If input was terminated in the usual way, by the player typing a carriage return, then a carriage return is printed
+  printOutput("\n");
+
+  // TODO: If it was interrupted, the cursor is left at the rightmost end of the text typed in so far.
+
+  // Next, lexical analysis is performed on the text
+  // The number of words is written in byte 1
+  dv.setUint8(parseBufferAddr + 1, wordEntries.length, false);
+  // and one 4-byte block is written for each word, from byte 2 onwards (except that it should stop before going beyond the maximum number of words specified).
+  wordEntries.forEach((we, i) => {
+    // Each block consists of the byte address of the word in the dictionary,
+    dv.setUint16(parseBufferAddr + 2 + 4*i, we);
+    // followed by a byte giving the number of letters in the word;
+    // TODO: is this the word IN THE DICTIONARY, capped at 6 chars?
+    // or the word RECEIVED from the player? guessing it's what's typed by the
+    // user, and that that's used in the response
+    // e.g. "I don't know the word 'superduperlongword'".
+    dv.setUint8(parseBufferAddr + 2 + 4*i + 2, words[i].length);
+    // and finally a byte giving the position in the text-buffer of the first letter of the word.
+    // TODO this is a real shitty hack - we should be getting this as we
+    // scan the zscii-text buffer - the same word appearing a 2nd time should
+    // return a later number.
+    var textBufferIndex = s.indexOf(words[i]) + 1;
+
+    dv.setUint8(parseBufferAddr + 2 + 4*i + 3, textBufferIndex);
+  })
+
+  inputEl.value = '';
+  AWAITING_INPUT = false;
+  setTimeout(readInstructionLoop);
+});
+
+function lookupWords(words) {
+  return words.map((w) => lookupWord(w));
+}
+
+function lookupWord(word) {
+  // TODO: zscii not ascii
+  var addr = dictionaryTableAddress();
+  var separatorsCount = dv.getUint8(addr, false);
+  addr += (1 + separatorsCount)
+  var entryLength = dv.getUint8(addr, false);
+  addr += 1;
+  var entryCount = dv.getUint16(addr, false);
+  addr += 2;
+  // now we're at the first entry
+
+  for (var i = 0; i < entryCount; i++) {
+    var text = readString(addr);
+
+    if (text == word.slice(0, 6)) {
+      return addr;
+    }
+
+    addr += entryLength;
+  }
+
+  return 0;
+}
+
+function splitCommand(s) {
+  var dictionaryTableAddr = dictionaryTableAddress();
+  var separators = [];
+  var separatorCount = dv.getUint8(dictionaryTableAddr, false);
+
+  for (var i=0; i < separatorCount; i++) {
+    separators.push(dv.getUint8(dictionaryTableAddr + 1 + i, false));
+  }
+
+  separators = separators.map((n) => String.fromCharCode(n)).join('');
+  // TODO: zscii, although separators are typically chars w/ equivalent ascii codes
+
+  // TODO: the separator char thing (13.6.1)
+  return s.split(' ');
+}
+
+function dictionaryTableAddress() {
+  return dv.getUint16(0x08, false);
+}
+
+function readInstructionLoop() {
+  while (!AWAITING_INPUT) {
+    executeNextInstruction(dv);
+  }
+}
 
 function logObjectTable(dv) {
   var addr = objectTableAddress();
@@ -249,7 +386,10 @@ function executeNextInstruction(dv) {
       break;
   }
 
-  log(`  form=${form}; canonicalOpcode=${canonicalOpcode}`);
+  log(`  form=${form}; canonicalOpcode=0x${canonicalOpcode.toString(16)}`);
+
+  // TODO: STOP ENUMERATING EVERY ALIAS - THIS IS ERROR PRONE AND SLOWS
+  // DEVELOPMENT
 
   // opcodes by name: https://inform-fiction.org/zmachine/standards/z1point1/sect15.html
   // opcodes by number: https://inform-fiction.org/zmachine/standards/z1point1/sect14.html
@@ -264,12 +404,23 @@ function executeNextInstruction(dv) {
     case 66:
       ops.jl(operands);
       break;
+    // case 3:
+    case 67:
+      ops.jg(operands);
+      break;
+    case 4:
+      ops.dec_chk(operands);
+      break;
     case 5:
       ops.inc_chk(operands);
       break;
     // case 6:
     case 70:
       ops.jin(operands);
+      break;
+    // case 7:
+    case 103:
+      ops.test(operands);
       break;
     // case 9:
     case 73:
@@ -293,25 +444,31 @@ function executeNextInstruction(dv) {
       break;
     case 15:
     case 79:
+    case 111:
       ops.loadw(operands);
       break;
     case 16:
     case 48:
+    case 80:
+    case 112:
       ops.loadb(operands);
       break;
     // case 17:
     case 81:
       ops.get_prop(operands);
       break;
+    case 52:
     case 84:
+    case 116:
       // add a b -> (result); a is a 'var', b is a 'small constant'
       ops.add(operands);
       break;
     case 85:
       ops.sub(operands);
       break;
-    case 116:
-      ops.add(operands);
+    // case 22:
+    case 86:
+      ops.mul(operands);
       break;
     // case 129:
     case 161:
@@ -373,8 +530,14 @@ function executeNextInstruction(dv) {
     case 225:
       ops.storew(operands);
       break;
+    case 226:
+      ops.storeb(operands);
+      break;
     case 227:
       ops.put_prop(operands);
+      break;
+    case 228:
+      ops.read(operands);
       break;
     case 229:
       ops.print_char(operands);
@@ -394,6 +557,16 @@ function executeNextInstruction(dv) {
 }
 
 const ops = {
+  dec_chk: function(operands) {
+    var varName = operands[0];
+    var threshold = operands[1];
+
+    var oldVal = readVar(varName);
+    var newVal = oldVal - 1;
+    writeVar(varName, newVal);
+
+    followJumpIf(newVal < threshold);
+  },
   inc_chk: function(operands) {
     var varName = operands[0];
     var threshold = operands[1];
@@ -412,6 +585,12 @@ const ops = {
     var objectIsChildOfObject = dv.getUint8(obj1Addr + 4, false) == obj2Id;
 
     followJumpIf(objectIsChildOfObject);
+  },
+  test: function(operands) {
+    var bitmap = operands[0];
+    var flags = operands[1];
+
+    followJumpIf((bitmap & flags) == flags);
   },
   and: function(operands) {
     var a = operands[0];
@@ -539,17 +718,14 @@ const ops = {
 
     // TODO: validate ids are in proper range
     if (targetId == 0) { throw 'nyi'; }
-    if (newParentId == 0) { throw 'nyi'; }
     if (targetId > 255) { throw 'invalid'; }
     if (newParentId > 255) { throw 'invalid'; }
-
 
     // TODO:
     // var zobj_t = new Struct([definition])
     // var destObj = zobj_t.at(dv, address)'
     // TODO: dry up with logObjectTable e.g.
     var targetAddr = objectAddress(targetId);
-    var newParentAddr = objectAddress(newParentId);
 
     // TODO: properly handle "old parent = null"
     var oldParentId = dv.getUint8(targetAddr + 4, false);
@@ -560,11 +736,17 @@ const ops = {
 
     // change src's parent:
     dv.setUint8(targetAddr + 4, newParentId, false);
-    // change src's next sibling to new parent's first child:
-    dv.setUint8(targetAddr + 5, dv.getUint8(newParentAddr + 6), false);
 
-    // change new parent's first child:
-    dv.setUint8(newParentAddr + 6, targetId, false);
+    if (newParentId != 0) {
+      var newParentAddr = objectAddress(newParentId);
+
+      // change src's next sibling to new parent's first child:
+      dv.setUint8(targetAddr + 5, dv.getUint8(newParentAddr + 6), false);
+
+      // change new parent's first child:
+      dv.setUint8(newParentAddr + 6, targetId, false);
+    }
+
     // point old parent's first child to old parent's first child's
     // next sibling, if it was pointing to src; else poinnt its prev sibling to
     // its next
@@ -695,6 +877,18 @@ const ops = {
 
     writeVar(resultVar, a + b);
   },
+  mul: function(operands) {
+    var a = operands[0];
+    var b = operands[1];
+    var resultVar = readPC();
+
+    // Signed 16-bit multiplication.
+    if (a > 0x7fff || b > 0x7fff) {
+      throw 'verify behavior here!'
+    }
+
+    writeVar(resultVar, a * b);
+  },
   get_sibling: function(operands) {
     var objectId = operands[0];
     var resultVar = readPC();
@@ -751,6 +945,23 @@ const ops = {
 
     followJumpIf(a < b);
   },
+  jg: function(operands) {
+    // Jump if a > b (using a signed 16-bit comparison).
+    var a = operands[0];
+    var b = operands[1];
+
+    if (a > 0x7fff) {
+      debugger;
+      a = 1 - (a & 0x7fff);
+    }
+
+    if (b > 0x7fff) {
+      debugger;
+      b = 1 - (b & 0x7fff);
+    }
+
+    followJumpIf(a > b);
+  },
   print_paddr(operands) {
     var packedAddr = operands[0];
     var addr = packedAddr * 2;
@@ -777,7 +988,16 @@ const ops = {
     var elementIndex = operands[1];
     var value = operands[2];
     var elementAddress = arrayAddress + (2 * elementIndex);
+
     dv.setUint16(elementAddress, value, false);
+  },
+  storeb: function(operands) {
+    var arrayAddress = operands[0];
+    var elementIndex = operands[1];
+    var value = operands[2];
+    var elementAddress = arrayAddress + elementIndex;
+
+    dv.setUint8(elementAddress, value, false);
   },
   put_prop: function(operands) {
     var objectId = operands[0];
@@ -830,6 +1050,17 @@ const ops = {
 
       propAddr += (1 + currentPropertySize);
     }
+  },
+  read: function(operands) {
+    // https://www.inform-fiction.org/zmachine/standards/z1point1/sect15.html#read
+
+    // In Versions 1 to 3, the status line is automatically redisplayed first.
+    redisplayStatusLine();
+
+    textBufferAddr = operands[0];
+    parseBufferAddr = operands[1];
+
+    AWAITING_INPUT = true;
   },
   print_char: function(operands) {
     var n = operands[0];
@@ -909,6 +1140,10 @@ const ops = {
     pc += (offset - 2);
   }
 };
+
+function redisplayStatusLine() {
+  console.warn("redisplayStatusLine not yet implemented");
+}
 
 function readPC() {
   var out = dv.getUint8(pc, false);
@@ -1050,6 +1285,7 @@ function log(s, color) {
 }
 
 function objectAddress(objectId) {
+  // TODO validate objectId in range
   // remember, objects start from 1, not 0
   return objectTableAddress()
     + 31 * 2             // skip past property defaults table
@@ -1121,6 +1357,8 @@ function printOutput(s) {
 
   span.textContent = s;
   outputEl.append(span);
+  // outputEl.scrollTo(outputEl.scrollHeight);
+  span.scrollIntoView({block: 'start', behavior: 'smooth'})
 }
 
 function logOnPage(s) {
