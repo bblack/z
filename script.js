@@ -678,55 +678,7 @@ const ops = {
     var propertyId = operands[1];
     var resultVar = readPC();
 
-    // Read property from object (resulting in the default value if it had no such declared property). If the property has length 1, the value is only that byte. If it has length 2, the first two bytes of the property are taken as a word value. It is illegal for the opcode to be used if the property has length greater than 2, and the result is unspecified.
-    var propValue;
-
-    // TODO: dry with put_prop
-    // object's properties table addr given in byte 7
-    var propAddressPtr = objectAddress(objectId) + 7;
-    var propTableAddr = dv.getUint16(propAddressPtr, false);
-    var propAddr = propTableAddr; // we'll be incrementing this
-    // first up is the byte giving the length of the short name (in words, not
-    // bytes), then the short name itself. skip past those:
-    propAddr += (1 + (2 * dv.getUint8(propAddr, false)));
-
-    // scan the obejct's properties until we find the right one
-    while (true) {
-      var propSizeByte = dv.getUint8(propAddr, false);
-      // 12.4.1
-      // "the size byte is arranged as 32 times the number of data bytes minus one, plus the property number."
-      // strange way of saying:
-      // - property number given in bottom 5 bits (range 0-31)
-      // - size (bytes?) given in top 3 bits (range 0-7) - but add one to that!
-      var currentPropertyId = propSizeByte & 0b0001_1111;
-      var currentPropertySize = ((propSizeByte & 0b1110_0000) >> 5) + 1;
-
-      if (currentPropertyId == propertyId) {
-        // we found it
-        // If the property has length 1, the value is only that byte. If it has length 2, the first two bytes of the property are taken as a word value.
-        // It is illegal for the opcode to be used if the property has length greater than 2, and the result is unspecified.
-        if (currentPropertySize == 1) {
-          propValue = dv.getUint8(propAddr + 1, false);
-        } else if (currentPropertySize == 2) {
-          propValue = dv.getUint16(propAddr + 1, false);
-        } else {
-          throw `unsupported property value size: ${currentPropertySize}`;
-        }
-
-        break;
-      }
-
-      if (currentPropertyId == 0) {
-        // end of object's property list; take the default:
-        if (propertyId > 31) {
-          throw "obj lacked property " + propertyId + "but you can't have a default value for a property with that id";
-        }
-        propValue = defaultPropertyValue(propertyId);
-        break;
-      }
-
-      propAddr += (1 + currentPropertySize);
-    }
+    var propValue = getPropertyValue(objectId, propertyId);
 
     writeVar(resultVar, propValue); // i guess?
   },
@@ -1033,52 +985,7 @@ const ops = {
     var propertyId = operands[1];
     var value = operands[2];
 
-    // TODO: dry w/ logObjectTable
-    // TODO: dry w/ get_prop
-    // object's properties table addr given in byte 7
-    var propAddressPtr = objectAddress(objectId) + 7;
-    var propAddr = dv.getUint16(propAddressPtr, false);
-    // first up is the byte giving the length of the short name (in words, not
-    // bytes), then the short name itself. skip past those:
-    propAddr += (1 + (2 * dv.getUint8(propAddr, false)));
-
-    // scan the obejct's properties until we find the right one
-    while (true) {
-      var propSizeByte = dv.getUint8(propAddr, false);
-      // 12.4.1
-      // "the size byte is arranged as 32 times the number of data bytes minus one, plus the property number."
-      // strange way of saying:
-      // - property number given in bottom 5 bits (range 0-31)
-      // - size (bytes?) given in top 3 bits (range 0-7) - but add one to that!
-      var currentPropertyId = propSizeByte & 0b0001_1111;
-      var currentPropertySize = ((propSizeByte & 0b1110_0000) >> 5) + 1;
-
-      // TODO we REALLY need to dry this up so we don't keep having to fix
-      // everything twice
-      if (currentPropertyId == propertyId) {
-        // we found it
-        if (currentPropertySize == 1) {
-          // "If the property length is 1, then the interpreter should store only the least significant byte of the value."
-          dv.setUint8(propAddr + 1, value & 0xff, false);
-          break;
-        } else if (currentPropertySize == 2) {
-          dv.setUint16(propAddr + 1, value, false);
-          break;
-        } else {
-          // "As with get_prop the property length must not be more than 2: if it is, the behaviour of the opcode is undefined."
-          throw `unsupported property value size: ${currentPropertySize}`;
-        }
-
-        return;
-      }
-
-      if (currentPropertyId == 0) {
-        // end of object's property list
-        throw `object ${objectId} does not have property ${propertyId}`;
-      }
-
-      propAddr += (1 + currentPropertySize);
-    }
+    setPropertyValue(objectId, propertyId, value);
   },
   read: function(operands) {
     // https://www.inform-fiction.org/zmachine/standards/z1point1/sect15.html#read
@@ -1313,6 +1220,90 @@ function log(s, color) {
   // logOnPage(s);
 }
 
+function getPropertyValue(objectId, propertyId) {
+  // Read property from object (resulting in the default value if it had no such declared property).
+  // It is illegal for the opcode to be used if the property has length greater than 2, and the result is unspecified.
+  var propValue;
+  var propAddr = propertyAddress(objectId, propertyId);
+
+  if (propAddr == 0) {
+    // end of object's property list; take the default:
+    propValue = defaultPropertyValue(propertyId);
+  } else {
+    // we found it
+    // If the property has length 1, the value is only that byte. If it has length 2, the first two bytes of the property are taken as a word value.
+    // It is illegal for the opcode to be used if the property has length greater than 2, and the result is unspecified.
+    var propSizeByte = dv.getUint8(propAddr, false);
+    var propSize = ((propSizeByte & 0b1110_0000) >> 5) + 1;
+
+    if (propSize == 1) {
+      propValue = dv.getUint8(propAddr + 1, false);
+    } else if (propSize == 2) {
+      propValue = dv.getUint16(propAddr + 1, false);
+    } else {
+      throw `unsupported property value size: ${propSize}`;
+    }
+  }
+
+  return propValue;
+}
+
+function setPropertyValue(objectId, propertyId, value) {
+  var propAddr = propertyAddress(objectId, propertyId);
+
+  if (propAddr == 0) {
+    throw `object ${objectId} does not have property ${propertyId}`;
+  }
+
+  var propSizeByte = dv.getUint8(propAddr, false);
+  var propSize = ((propSizeByte & 0b1110_0000) >> 5) + 1;
+
+  if (propSize == 1) {
+    // "If the property length is 1, then the interpreter should store only the least significant byte of the value."
+    dv.setUint8(propAddr + 1, value & 0xff, false);
+  } else if (propSize == 2) {
+    dv.setUint16(propAddr + 1, value, false);
+  } else {
+    // "As with get_prop the property length must not be more than 2: if it is, the behaviour of the opcode is undefined."
+    throw `unsupported property value size: ${propSize}`;
+  }
+}
+
+function propertyAddress(objectId, propertyId) {
+  // TODO: dry with put_prop
+  // object's properties table addr given in byte 7
+  var propAddressPtr = objectAddress(objectId) + 7;
+  var propTableAddr = dv.getUint16(propAddressPtr, false);
+  var propAddr = propTableAddr; // we'll be incrementing this
+  // first up is the byte giving the length of the short name (in words, not
+  // bytes), then the short name itself. skip past those:
+  propAddr += (1 + (2 * dv.getUint8(propAddr, false)));
+
+  // scan the obejct's properties until we find the right one
+  while (true) {
+    var propSizeByte = dv.getUint8(propAddr, false);
+    // 12.4.1
+    // "the size byte is arranged as 32 times the number of data bytes minus one, plus the property number."
+    // strange way of saying:
+    // - property number given in bottom 5 bits (range 0-31)
+    // - size (bytes?) given in top 3 bits (range 0-7) - but add one to that!
+    var currentPropertyId = propSizeByte & 0b0001_1111;
+    var currentPropertySize = ((propSizeByte & 0b1110_0000) >> 5) + 1;
+
+    if (currentPropertyId == propertyId) {
+      // we found it
+      return propAddr;
+    }
+
+    if (currentPropertyId == 0) {
+      // object has no such property
+      return 0;
+    }
+
+    propAddr += (1 + currentPropertySize);
+  }
+}
+
 function objectAddress(objectId) {
   // TODO validate objectId in range
   // remember, objects start from 1, not 0
@@ -1322,7 +1313,10 @@ function objectAddress(objectId) {
 }
 
 function defaultPropertyValue(propertyId) {
-   return dv.getUint16(objectTableAddress() + 2 * (propertyId - 1));
+  if (propertyId > 31) {
+    throw "cannot get default value for property " + propertyId;
+  }
+  return dv.getUint16(objectTableAddress() + 2 * (propertyId - 1));
 }
 
 function objectTableAddress() {
