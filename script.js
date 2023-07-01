@@ -406,6 +406,7 @@ function executeNextInstruction(dv) {
       break;
     // case 3:
     case 67:
+    case 99:
       ops.jg(operands);
       break;
     case 4:
@@ -419,6 +420,7 @@ function executeNextInstruction(dv) {
       ops.jin(operands);
       break;
     // case 7:
+    case 71:
     case 103:
       ops.test(operands);
       break;
@@ -434,8 +436,13 @@ function executeNextInstruction(dv) {
     case 75:
       ops.set_attr(operands);
       break;
+    // case 12:
+    case 76:
+      ops.clear_attr(operands);
+      break;
     case 13:
     case 45:
+    case 205:
       ops.store(operands);
       break;
     // case 14:
@@ -627,6 +634,16 @@ const ops = {
     var objectAddr = objectAddress(objectId);
     var attrFlags = dv.getUint32(objectAddr, false);
     var newAttrFlags = attrFlags | (1 << (31 - attrId));
+
+    dv.setUint32(objectAddr, newAttrFlags, false);
+  },
+  clear_attr(operands) {
+    var objectId = operands[0];
+    var attrId = operands[1];
+
+    var objectAddr = objectAddress(objectId);
+    var attrFlags = dv.getUint32(objectAddr, false);
+    var newAttrFlags = attrFlags & ~(1 << (31 - attrId));
 
     dv.setUint32(objectAddr, newAttrFlags, false);
   },
