@@ -422,10 +422,13 @@ function executeNextInstruction(dv) {
       break;
     case 5:
     case 37:
+    case 197:
       ops.inc_chk(operands);
       break;
     // case 6:
+    case 38:
     case 70:
+    case 102:
       ops.jin(operands);
       break;
     // case 7:
@@ -437,15 +440,15 @@ function executeNextInstruction(dv) {
     case 73:
       ops.and(operands);
       break;
-    // case 10:
+    case 10:
     case 74:
       ops.test_attr(operands);
       break;
-    // case 11:
+    case 11:
     case 75:
       ops.set_attr(operands);
       break;
-    // case 12:
+    case 12:
     case 76:
       ops.clear_attr(operands);
       break;
@@ -455,6 +458,7 @@ function executeNextInstruction(dv) {
       ops.store(operands);
       break;
     // case 14:
+    case 46:
     case 110:
       ops.insert_obj(operands);
       break;
@@ -501,6 +505,7 @@ function executeNextInstruction(dv) {
       ops.get_sibling(operands);
       break;
     // case 130:
+    case 146:
     case 162:
       ops.get_child(operands);
       break;
