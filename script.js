@@ -504,6 +504,11 @@ function executeNextInstruction(dv) {
     case 162:
       ops.get_child(operands);
       break;
+    // case 131:
+    case 147:
+    case 163:
+      ops.get_parent(operands);
+      break;
     // case 132:
     case 164:
       ops.get_prop_len(operands);
@@ -526,9 +531,6 @@ function executeNextInstruction(dv) {
       break;
     case 160:
       ops.jz(operands);
-      break;
-    case 163:
-      ops.get_parent(operands);
       break;
     case 171:
       ops.ret(operands);
