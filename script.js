@@ -355,7 +355,8 @@ function readString(addr, onAddrAdvanced) {
 }
 
 function executeNextInstruction(dv) {
-  log(`Reading next instruction, at address 0x${pc.toString(16)}`);
+  var instAddr = pc;
+  log(`Reading next instruction, at address 0x${instAddr.toString(16)}`);
 
   // https://www.inform-fiction.org/zmachine/standards/z1point1/sect04.html
   var firstByte = readPC();
@@ -387,6 +388,13 @@ function executeNextInstruction(dv) {
   }
 
   log(`  form=${form}; canonicalOpcode=0x${canonicalOpcode.toString(16)}`);
+
+  {
+    var div = document.createElement("div");
+    div.textContent = `0x${instAddr.toString(16).padStart(4, '0')}: ${opcode}`;
+    document.querySelector("#log").append(div);
+  }
+
 
   // TODO: STOP ENUMERATING EVERY ALIAS - THIS IS ERROR PRONE AND SLOWS
   // DEVELOPMENT
@@ -584,9 +592,9 @@ function executeNextInstruction(dv) {
 const ops = {
   dec_chk: function(operands) {
     var varName = operands[0];
-    var threshold = operands[1];
+    var threshold = toSigned16Bit(operands[1]);
 
-    var oldVal = readVar(varName);
+    var oldVal = toSigned16Bit(readVar(varName));
     var newVal = oldVal - 1;
     writeVar(varName, newVal);
 
@@ -594,9 +602,9 @@ const ops = {
   },
   inc_chk: function(operands) {
     var varName = operands[0];
-    var threshold = operands[1];
+    var threshold = toSigned16Bit(operands[1]);
 
-    var oldVal = readVar(varName);
+    var oldVal = toSigned16Bit(readVar(varName));
     var newVal = oldVal + 1;
     writeVar(varName, newVal);
 
@@ -867,27 +875,23 @@ const ops = {
     // TODO: set pc via fn, which also logs its new value
   },
   add: function(operands) {
-    var a = operands[0];
-    var b = operands[1];
+    var a = toSigned16Bit(operands[0]);
+    var b = toSigned16Bit(operands[1]);
     var resultVar = readPC();
 
     writeVar(resultVar, a + b);
   },
   mul: function(operands) {
-    var a = operands[0];
-    var b = operands[1];
+    var a = toSigned16Bit(operands[0]);
+    var b = toSigned16Bit(operands[1]);
     var resultVar = readPC();
 
     // Signed 16-bit multiplication.
-    if (a > 0x7fff || b > 0x7fff) {
-      throw 'verify behavior here!'
-    }
-
     writeVar(resultVar, a * b);
   },
   div: function(operands) {
-    var a = operands[0];
-    var b = operands[1];
+    var a = toSigned16Bit(operands[0]);
+    var b = toSigned16Bit(operands[1]);
     var resultVar = readPC();
 
     // js doesn't have integer division, but this is easy:
@@ -933,7 +937,7 @@ const ops = {
   },
   inc: function(operands) {
     var varName = operands[0];
-    var value = readVar(varName);
+    var value = toSigned16Bit(readVar(varName));
 
     writeVar(varName, value + 1);
   },
@@ -952,39 +956,15 @@ const ops = {
   },
   jl: function(operands) {
     // Jump if a < b (using a signed 16-bit comparison).
-    var a = operands[0];
-    var b = operands[1];
-
-    if (a > 0x7fff) {
-      debugger;
-      a = 1 - (a & 0x7fff);
-    }
-
-    // if (a & 0x8000) {
-    //   a -= 0x10000;
-    // }
-
-    if (b > 0x7fff) {
-      debugger;
-      b = 1 - (b & 0x7fff);
-    }
+    var a = toSigned16Bit(operands[0]);
+    var b = toSigned16Bit(operands[1]);
 
     followJumpIf(a < b);
   },
   jg: function(operands) {
     // Jump if a > b (using a signed 16-bit comparison).
-    var a = operands[0];
-    var b = operands[1];
-
-    if (a > 0x7fff) {
-      debugger;
-      a = 1 - (a & 0x7fff);
-    }
-
-    if (b > 0x7fff) {
-      debugger;
-      b = 1 - (b & 0x7fff);
-    }
+    var a = toSigned16Bit(operands[0]);
+    var b = toSigned16Bit(operands[1]);
 
     followJumpIf(a > b);
   },
@@ -1002,21 +982,11 @@ const ops = {
     followJumpIf(a == 0);
   },
   sub: function(operands) {
-    var a = operands[0];
-    var b = operands[1];
+    var a = toSigned16Bit(operands[0]);
+    var b = toSigned16Bit(operands[1]);
     var resultVar = readPC();
 
     // SIGNED 16-bit subtraction, idk.
-    if (a > 0x7fff) {
-      debugger;
-      a = 1 - (a & 0x7fff);
-    }
-
-    if (b > 0x7fff) {
-      debugger;
-      b = 1 - (b & 0x7fff);
-    }
-
     writeVar(resultVar, a - b);
   },
   storew: function(operands) {
@@ -1068,7 +1038,7 @@ const ops = {
       // https://www.inform-fiction.org/zmachine/standards/z1point1/sect15.html#print_num
       // so, once we get our first negative, let's double check that:
       debugger;
-      a = -(~(a & 0x7f) + 1);
+      a = a - 0x100;
     }
 
     printOutput(a.toString());
@@ -1135,11 +1105,7 @@ const ops = {
   jump: function(operands) {
     // unconditional jump. not a "branch"; op0 is the destination offset:
     var offset = operands[0];
-    if (offset & 0x8000) {
-      // it was pulled from the DataView as an unsigned 16-bit value, but
-      // it's a signed 16-bit value; negate it properly:
-      offset -= 0x10000;
-    }
+    offset = toSigned16Bit(offset);
     pc += (offset - 2);
   }
 };
@@ -1149,12 +1115,18 @@ function redisplayStatusLine() {
 }
 
 function readPC() {
+  // We will always return unsigned values, because it's simple.
+  // It is the responsibility of each opcode handler to decide if it needs to
+  // interpret this value as signed, e.g. to do arithmetic or comparison.
   var out = dv.getUint8(pc, false);
   pc += 1;
   return out;
 }
 
 function readPC16() {
+  // We will always return unsigned values, because it's simple.
+  // It is the responsibility of each opcode handler to decide if it needs to
+  // interpret this value as signed, e.g. to do arithmetic or comparison.
   var out = dv.getUint16(pc, false);
   pc += 2;
   return out;
@@ -1466,4 +1438,13 @@ function logOnPage(s) {
 
   // this accounts for 97% of program time?
   logpane.scrollTo(0, logpane.scrollHeight);
+}
+
+function toSigned16Bit(n) {
+  if (n & 0x8000) {
+    // debugger;
+    n = n - 0x1_0000;
+  }
+
+  return n;
 }
