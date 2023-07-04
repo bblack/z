@@ -714,7 +714,9 @@ const ops = {
 
     var propAddr = propertyAddress(objectId, propertyId);
 
-    writeVar(resultVar, propAddr);
+    // skip 1 for the size byte. apparently get_prop_addr is supposed to give
+    // the address of the data itself, idk.
+    writeVar(resultVar, propAddr + 1);
   },
   insert_obj: function(operands) {
     var targetId = operands[0];
