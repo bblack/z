@@ -413,6 +413,7 @@ function executeNextInstruction(dv) {
       ops.dec_chk(operands);
       break;
     case 5:
+    case 37:
       ops.inc_chk(operands);
       break;
     // case 6:
@@ -464,6 +465,10 @@ function executeNextInstruction(dv) {
     case 81:
       ops.get_prop(operands);
       break;
+    // case 18:
+    case 82:
+      ops.get_prop_addr(operands);
+      break;
     case 52:
     case 84:
     case 116:
@@ -472,11 +477,16 @@ function executeNextInstruction(dv) {
       break;
     case 53:
     case 85:
+    case 117:
       ops.sub(operands);
       break;
     // case 22:
     case 86:
       ops.mul(operands);
+      break;
+    // case 23:
+    case 87:
+      ops.div(operands);
       break;
     // case 129:
     case 161:
@@ -485,6 +495,10 @@ function executeNextInstruction(dv) {
     // case 130:
     case 162:
       ops.get_child(operands);
+      break;
+    // case 132:
+    case 164:
+      ops.get_prop_len(operands);
       break;
     // case 133:
     case 149:
@@ -519,6 +533,9 @@ function executeNextInstruction(dv) {
       break;
     case 178:
       ops.print(operands);
+      break;
+    case 179:
+      ops.print_ret(operands);
       break;
     case 184:
       ops.ret_popped(operands);
@@ -681,6 +698,15 @@ const ops = {
     var propValue = getPropertyValue(objectId, propertyId);
 
     writeVar(resultVar, propValue); // i guess?
+  },
+  get_prop_addr: function(operands) {
+    var objectId = operands[0];
+    var propertyId = operands[1];
+    var resultVar = readPC();
+
+    var propAddr = propertyAddress(objectId, propertyId);
+
+    writeVar(resultVar, propAddr);
   },
   insert_obj: function(operands) {
     var targetId = operands[0];
@@ -859,6 +885,22 @@ const ops = {
 
     writeVar(resultVar, a * b);
   },
+  div: function(operands) {
+    var a = operands[0];
+    var b = operands[1];
+    var resultVar = readPC();
+
+    // js doesn't have integer division, but this is easy:
+    var q = Math.trunc(a / b);
+    // and let's check our work:
+    var r = a % b;
+    if (q * b + r != a) {
+      debugger;
+      console.warn(`verification of division failed. we found that ${a} / ${a} = ${q}`)
+    }
+
+    writeVar(resultVar, q);
+  },
   get_sibling: function(operands) {
     var objectId = operands[0];
     var resultVar = readPC();
@@ -878,6 +920,16 @@ const ops = {
 
     writeVar(resultVar, childId);
     followJumpIf(childId != 0);
+  },
+  get_prop_len: function(operands) {
+    var propAddr = operands[0];
+    var resultVar = readPC();
+
+    // TODO: dry w/ propertyAddress
+    var propSizeByte = dv.getUint8(propAddr, false);
+    var propSize = ((propSizeByte & 0b1110_0000) >> 5) + 1;
+
+    writeVar(resultVar, propSize);
   },
   inc: function(operands) {
     var varName = operands[0];
@@ -907,6 +959,10 @@ const ops = {
       debugger;
       a = 1 - (a & 0x7fff);
     }
+
+    // if (a & 0x8000) {
+    //   a -= 0x10000;
+    // }
 
     if (b > 0x7fff) {
       debugger;
@@ -1048,6 +1104,17 @@ const ops = {
     // debugger;
     var s = readString(pc, (addr) => pc = addr);
     printOutput(s);
+  },
+  print_ret: function(operands) {
+    // Print the quoted (literal) Z-encoded string,
+    var s = readString(pc, (addr) => pc = addr);
+    printOutput(s);
+    // then print a new-line
+    printOutput("\n");
+    // and then return true (i.e., 1).
+    // ... is this "return" like "store in var" or "return" like "from the current routine"?
+    // zzo says the latter.
+    returnWithValue(1);
   },
   ret_popped: function(operands) {
     returnWithValue(readVar(0));
@@ -1213,7 +1280,8 @@ function topCallStackFrame() {
 }
 
 function log(s, color) {
-  var outline = `${new Date().toISOString()} ${s}`;
+  // var outline = `${new Date().toISOString()} ${s}`;
+  var outline = s;
 
   console.log(outline);
 
@@ -1338,7 +1406,8 @@ function followJumpIf(predicate) {
     offset = ((branchInfo1 & 0b0011_1111) << 8) | branchInfo2;
 
     if (offset & 0b0010_0000_0000_0000) {
-      offset = -offset + 1;
+      // offset = -offset + 1;
+      offset -= 0b0100_0000_0000_0000;
     }
   }
 
