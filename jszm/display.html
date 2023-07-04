@@ -1,0 +1,96 @@
+<html>
+<head>
+  <meta charset="us-ascii">
+  <meta http-equiv="content-type" content="text/html;charset=us-ascii">
+  <title>JavaScript Z-Machine</title>
+  <script src="jszm_old.js"></script>
+  <script src="display.js"></script>
+  <style>
+    @keyframes cursor {
+      from {
+        visibility: normal;
+      }
+      to {
+        visibility: hidden;
+      }
+    }
+    body {
+      background-color: #999999;
+      margin: 4px;
+      max-height: 100%;
+    }
+    #screen {
+      border-collapse: collapse;
+      border-spacing: 0px;
+      max-height: 100%;
+      width: 100%;
+    }
+    #screen tr {
+      padding: 0px;
+    }
+    #filediv {
+      background-color: #77FFFF;
+      color: #000000;
+    }
+    #start {
+      float: right;
+    }
+    #status {
+      background-color: #CCCCCC;
+      color: #000000;
+    }
+    #textrow {
+      height: 100%;
+    }
+    #text {
+      background-color: #000088;
+      height: 100%;
+      overflow-y: scroll;
+      max-height: 100%;
+      padding: 0px;
+      white-space: pre-wrap;
+    }
+    #command {
+      background-color: #0001AF;
+      border: none;
+      color: #BCFFBB;
+      width: 100%;
+    }
+    #command::-moz-placeholder {
+      color: #FFFFFF;
+      font-weight: bold;
+      opacity: 1;
+    }
+    .varpitch {
+      color: #AAAAAA;
+    }
+    .fixpitch {
+      color: #AAB6CC;
+      font-family: monospace;
+    }
+    .varpitch.input {
+      color: #AAE5AA;
+    }
+    .fixpitch.input {
+      color: #AAE5CC;
+    }
+    .cursor {
+      color: #FFFFFF;
+      animation: .3s steps(2,start) 0s infinite alternate cursor;
+    }
+  </style>
+</head>
+<body onload="return screen_resize();" onresize="return screen_resize();">
+  <table id="screen">
+    <tr><td id="filediv"><input type=file id="story" onchange="return file_changed();" autocomplete="off">
+      <button id="start" disabled onclick="return do_start();">Start</button></td><tr>
+    <tr><td id="status">0</td></tr>
+    <tr id="textrow"><td id="textcell"><div id="text"></div></td></tr>
+    <tr><td><input id="command" placeholder="" onkeydown="return do_key(event);" autofocus></td></tr>
+  </table>
+  <script>
+    elem("story").disabled=false;
+    elem("start").disabled=true;
+  </script>
+</body>
+</html>
