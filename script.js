@@ -14,7 +14,12 @@ window.addEventListener('unhandledrejection', (e) => log(event.reason, 'red'));
 var inputs = [
   'open mailbox',
   'read leaflet',
-  'e'
+  'e',
+  'n',
+  'e',
+  'e',
+  'e',
+  'w'
 ];
 
 // TODO: either pass dv everywhere, or refer to global everywhere.
@@ -429,6 +434,7 @@ function executeNextInstruction(dv) {
       ops.jl(operands);
       break;
     // case 3:
+    case 35:
     case 67:
     case 99:
       ops.jg(operands);
@@ -601,6 +607,9 @@ function executeNextInstruction(dv) {
       break;
     case 230:
       ops.print_num(operands);
+      break;
+    case 231:
+      ops.random(operands);
       break;
     case 232:
       ops.push(operands);
@@ -1079,6 +1088,17 @@ const ops = {
     }
 
     printOutput(a.toString());
+  },
+  random: function(operands) {
+    var range = operands[0];
+    var resultVar = readPC();
+
+    if (range > 0) {
+      var x = Math.floor(range * Math.random()) + 1;
+      writeVar(resultVar, x);
+    } else {
+      console.warn("rand reseeding is not implemented");
+    }
   },
   push: function(operands) {
     var value = operands[0];
