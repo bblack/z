@@ -13,7 +13,8 @@ window.addEventListener('unhandledrejection', (e) => log(event.reason, 'red'));
 
 var inputs = [
   'open mailbox',
-  'read leaflet'
+  'read leaflet',
+  'e'
 ];
 
 // TODO: either pass dv everywhere, or refer to global everywhere.
@@ -132,6 +133,10 @@ function provideInput(s) {
 
   // The text typed is reduced to lower case (so that it can tidily be printed back by the program if need be) and stored in bytes 1 onward
   s = s.slice(0, maxLetters - 1).toLowerCase();
+
+  // 7.1.1.1
+  // In Versions 1 to 5, the player's input to the read opcode should be echoed to output streams 1 and 2 (if stream 2 is active), so that text typed in appears in any transcript.
+  printOutput(s);
 
   for (var i = 0; i < maxLetters; i++) {
     var z = (i < s.length) ?
@@ -413,6 +418,7 @@ function executeNextInstruction(dv) {
   // opcodes by number: https://inform-fiction.org/zmachine/standards/z1point1/sect14.html
   switch (opcode) {
     // case 1:
+    case 33:
     case 65:
     case 97:
     case 193: // var form
@@ -489,6 +495,7 @@ function executeNextInstruction(dv) {
       break;
     // case 18:
     case 82:
+    case 114:
       ops.get_prop_addr(operands);
       break;
     case 52:
@@ -546,6 +553,7 @@ function executeNextInstruction(dv) {
     case 160:
       ops.jz(operands);
       break;
+    case 155:
     case 171:
       ops.ret(operands);
       break;
@@ -996,7 +1004,6 @@ const ops = {
   print_paddr(operands) {
     var packedAddr = operands[0];
     var addr = packedAddr * 2;
-    debugger;
     var s = readString(addr);
     printOutput(s);
   },

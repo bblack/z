@@ -39,6 +39,7 @@ body {
 
 #panes .pane#logpane {
 	overflow-y: auto;
+	display: none; /* comment this out while debugging */
 }
 
 #panes .pane#logpane>#log {
