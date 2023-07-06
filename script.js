@@ -11,6 +11,11 @@ log("Ready.");
 
 window.addEventListener('unhandledrejection', (e) => log(event.reason, 'red'));
 
+var inputs = [
+  'open mailbox',
+  'read leaflet'
+];
+
 // TODO: either pass dv everywhere, or refer to global everywhere.
 // started using global ref for convenience.
 var dv;
@@ -108,6 +113,12 @@ document.querySelector("#stdin").addEventListener('keypress', function(event) {
   // A sequence of characters is read in from the current input stream until a carriage return (or, in Versions 5 and later, any terminating character) is found.
   var inputEl = event.currentTarget;
   var s = inputEl.value;
+  inputEl.value = '';
+
+  provideInput(s);
+});
+
+function provideInput(s) {
 
   // TODO: read esc, del, etc and convert all this to zscii chars
   // s = stringToZsciiBuffer(s);
@@ -166,10 +177,10 @@ document.querySelector("#stdin").addEventListener('keypress', function(event) {
     dv.setUint8(parseBufferAddr + 2 + 4*i + 3, textBufferIndex);
   })
 
-  inputEl.value = '';
+
   AWAITING_INPUT = false;
   setTimeout(readInstructionLoop);
-});
+}
 
 function lookupWords(words) {
   return words.map((w) => lookupWord(w));
@@ -390,9 +401,8 @@ function executeNextInstruction(dv) {
   log(`  form=${form}; canonicalOpcode=0x${canonicalOpcode.toString(16)}`);
 
   {
-    var div = document.createElement("div");
-    div.textContent = `0x${instAddr.toString(16).padStart(4, '0')}: ${opcode}`;
-    document.querySelector("#log").append(div);
+    document.querySelector("#log").value +=
+      `0x${instAddr.toString(16).padStart(4, '0')}: ${opcode}\n`;
   }
 
 
@@ -531,7 +541,6 @@ function executeNextInstruction(dv) {
       break;
     // case 141:
     case 173:
-      break;
       ops.print_paddr(operands);
       break;
     case 160:
@@ -935,11 +944,18 @@ const ops = {
     followJumpIf(childId != 0);
   },
   get_prop_len: function(operands) {
-    var propAddr = operands[0];
+    var propDataAddr = operands[0];
     var resultVar = readPC();
 
+    // TODO @get_prop_len 0 must return 0
+    if (propDataAddr == 0) {
+      throw 'nyi';
+    }
+
     // TODO: dry w/ propertyAddress
-    var propSizeByte = dv.getUint8(propAddr, false);
+    // this seems kinda stupid but op0 is the address of the property DATA.
+    // we have to backtrack one byte to get the size.
+    var propSizeByte = dv.getUint8(propDataAddr - 1, false);
     var propSize = ((propSizeByte & 0b1110_0000) >> 5) + 1;
 
     writeVar(resultVar, propSize);
@@ -1032,6 +1048,11 @@ const ops = {
     parseBufferAddr = operands[1];
 
     AWAITING_INPUT = true;
+
+    var  s = inputs.shift();
+    if (s) {
+      setTimeout(() => provideInput(s));
+    }
   },
   print_char: function(operands) {
     var n = operands[0];
@@ -1212,6 +1233,8 @@ function readNextOperand(operandType) {
 }
 
 function readVar(n) {
+  log(`readVar ${n}`)
+
   if (n == 0) {
     var stack = topCallStackFrame().substack;
     if (stack.length == 0) { throw "illegal to pop empty stack"; }
@@ -1227,6 +1250,8 @@ function readVar(n) {
 }
 
 function writeVar(n, x) {
+  log(`writeVar ${n}, ${x}`)
+
   if (n == 0) {
     topCallStackFrame().substack.push(x);
     return;

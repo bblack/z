@@ -41,12 +41,18 @@ body {
 	overflow-y: auto;
 }
 
-#panes .pane#logpane>pre {
+#panes .pane#logpane>#log {
+	display: block;
+	width: 100%;
+	height: 100%;
 	overflow-y: auto;
 	white-space: pre-wrap;
+	background: #444;
+	color: white;
 }
 
 #stdout {
+	white-space: pre-wrap;
 }
 
 input#stdin {
