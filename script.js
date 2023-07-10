@@ -7,19 +7,34 @@
 // var OPERAND_TYPES_BY_ID = OPERAND_TYPES.reduce((acc, el) => {acc[el.id] = el; return acc}, {});
 // var OPERAND_TYPES_BY_NAME = OPERAND_TYPES.reduce((acc, el) => {acc[el.name] = el; return acc}, {});
 
+// var sputnik = window.open('sputnik.html', null, 'popup=1');
+
 log("Ready.");
 
 window.addEventListener('unhandledrejection', (e) => log(event.reason, 'red'));
 
-var inputs = [
-  'open mailbox',
-  'read leaflet',
+var inputs =
+// [
+//   'open mailbox',
+//   'read leaflet',
+//   'e',
+//   'n',
+//   'e',
+//   'e',
+//   'e',
+//   'w'
+// ];
+[
   'e',
   'n',
   'e',
-  'e',
-  'e',
-  'w'
+  'open',
+  'open window',
+  'enter',
+  'take bottle',
+  'w',
+  'take lantern',
+  'e'
 ];
 
 // TODO: either pass dv everywhere, or refer to global everywhere.
@@ -51,11 +66,18 @@ var input = document.querySelector("input#file");
 
 var AWAITING_INPUT = false;
 
+function focusInput() {
+  document.querySelector("#stdin").focus();
+}
+
+window.addEventListener('focus', () => focusInput());
+document.querySelector('#stdout').addEventListener('click', () => focusInput());
+
 input.addEventListener("change", function() {
   var file = this.files[0];
   log(`received file ${file.name} of size ${file.size} bytes`);
 
-  document.querySelector("#stdin").focus();
+  focusInput();
 
   file.arrayBuffer().then((ab) => {
     log(`Read ${ab.byteLength} bytes`);
@@ -118,10 +140,13 @@ document.querySelector("#stdin").addEventListener('keypress', function(event) {
 
   // A sequence of characters is read in from the current input stream until a carriage return (or, in Versions 5 and later, any terminating character) is found.
   var inputEl = event.currentTarget;
-  var s = inputEl.value;
-  inputEl.value = '';
+  var s = inputEl.textContent;
+  inputEl.textContent = '';
 
   provideInput(s);
+
+  // default would add \n to textContent
+  event.preventDefault();
 });
 
 function provideInput(s) {
@@ -464,6 +489,7 @@ function executeNextInstruction(dv) {
       break;
     case 10:
     case 74:
+    case 106:
       ops.test_attr(operands);
       break;
     case 11:
@@ -499,7 +525,7 @@ function executeNextInstruction(dv) {
     case 81:
       ops.get_prop(operands);
       break;
-    // case 18:
+    case 18:
     case 82:
     case 114:
       ops.get_prop_addr(operands);
@@ -555,6 +581,10 @@ function executeNextInstruction(dv) {
     // case 141:
     case 173:
       ops.print_paddr(operands);
+      break;
+    // case 142:
+    case 174:
+      ops.load(operands);
       break;
     case 160:
       ops.jz(operands);
@@ -1015,6 +1045,12 @@ const ops = {
     var addr = packedAddr * 2;
     var s = readString(addr);
     printOutput(s);
+  },
+  load(operands) {
+    var x = readVar(operands[0]);
+    var resultVar = readPC();
+
+    writeVar(resultVar, x);
   },
   jz: function(operands) {
     // jump if a == 0.
@@ -1478,10 +1514,11 @@ function returnWithValue(returnValue) {
 
 function printOutput(s) {
   var outputEl = document.querySelector('#stdout');
+  var inputEl = document.querySelector('#stdin');
   var span = document.createElement('span');
 
   span.textContent = s;
-  outputEl.append(span);
+  outputEl.insertBefore(span, inputEl);
   // outputEl.scrollTo(outputEl.scrollHeight);
   span.scrollIntoView({block: 'start', behavior: 'smooth'})
 }
