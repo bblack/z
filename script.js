@@ -14,17 +14,9 @@ log("Ready.");
 window.addEventListener('unhandledrejection', (e) => log(event.reason, 'red'));
 
 var inputs =
-// [
-//   'open mailbox',
-//   'read leaflet',
-//   'e',
-//   'n',
-//   'e',
-//   'e',
-//   'e',
-//   'w'
-// ];
 [
+  'open mailbox',
+  'read leaflet',
   'e',
   'n',
   'e',
@@ -34,7 +26,10 @@ var inputs =
   'take bottle',
   'w',
   'take lantern',
-  'e'
+  'e',
+  'w',
+  'take sword',
+  'eat'
 ];
 
 // TODO: either pass dv everywhere, or refer to global everywhere.
@@ -80,51 +75,56 @@ input.addEventListener("change", function() {
   focusInput();
 
   file.arrayBuffer().then((ab) => {
-    log(`Read ${ab.byteLength} bytes`);
-
-    dv = new DataView(ab);
-
-    // https://inform-fiction.org/zmachine/standards/z1point1/sect11.html
-
-    var version = dv.getUint8(0x00, false);
-    log("  Version: " + version);
-
-    var flags = dv.getUint16(0x01, false);
-    log("  Flags: ");
-
-    var statusLineType = flags & 0x01;
-    switch (statusLineType) {
-      case 0: log("  Status line type: score/turns"); break;
-      case 1: log("  Status line type: hours:mins"); break;
-      default: log("  Status line type: UNKNOWN " + statusLineType);
-    }
-
-    var storyFileSplitOverTwoDiscs = Boolean(flags & 0x02);
-    log("  Story file split over two discs: " + storyFileSplitOverTwoDiscs);
-
-    var statusLineUnavailable = Boolean(flags & 0x08);
-    log("  Status line unavailable: " + statusLineUnavailable);
-
-    var screenSplittingAvailable = Boolean(flags & 0x10);
-    log("  Screen-splitting available: " + screenSplittingAvailable);
-
-    var isVariablePitchFontDefault = Boolean(flags & 0x20);
-    log("  Is variable-pitch font default: " + isVariablePitchFontDefault);
-
-    pc = dv.getUint16(0x06, false);
-    // doc says "byte address" - but relative to what?
-    // start of all mem? dynamic? static? high?
-    log("pc: 0x" + pc.toString(16));
-
-    var storyFileLength = dv.getUint16(0x1a, false);
-    log(`Story file length: ${storyFileLength} words (${storyFileLength * 2} bytes)`);
-
-    logObjectTable(dv);
-
-    // and away we go:
-    readInstructionLoop();
+    loadGame(ab);
   });
 });
+
+function loadGame(ab) {
+
+  log(`Read ${ab.byteLength} bytes`);
+
+  dv = new DataView(ab);
+
+  // https://inform-fiction.org/zmachine/standards/z1point1/sect11.html
+
+  var version = dv.getUint8(0x00, false);
+  log("  Version: " + version);
+
+  var flags = dv.getUint16(0x01, false);
+  log("  Flags: ");
+
+  var statusLineType = flags & 0x01;
+  switch (statusLineType) {
+    case 0: log("  Status line type: score/turns"); break;
+    case 1: log("  Status line type: hours:mins"); break;
+    default: log("  Status line type: UNKNOWN " + statusLineType);
+  }
+
+  var storyFileSplitOverTwoDiscs = Boolean(flags & 0x02);
+  log("  Story file split over two discs: " + storyFileSplitOverTwoDiscs);
+
+  var statusLineUnavailable = Boolean(flags & 0x08);
+  log("  Status line unavailable: " + statusLineUnavailable);
+
+  var screenSplittingAvailable = Boolean(flags & 0x10);
+  log("  Screen-splitting available: " + screenSplittingAvailable);
+
+  var isVariablePitchFontDefault = Boolean(flags & 0x20);
+  log("  Is variable-pitch font default: " + isVariablePitchFontDefault);
+
+  pc = dv.getUint16(0x06, false);
+  // doc says "byte address" - but relative to what?
+  // start of all mem? dynamic? static? high?
+  log("pc: 0x" + pc.toString(16));
+
+  var storyFileLength = dv.getUint16(0x1a, false);
+  log(`Story file length: ${storyFileLength} words (${storyFileLength * 2} bytes)`);
+
+  logObjectTable(dv);
+
+  // and away we go:
+  readInstructionLoop();
+}
 
 function zsciiCodeFromAsciiCode(n) {
   if (n >= 32 && n <= 126) {
@@ -576,6 +576,10 @@ function executeNextInstruction(dv) {
     case 149:
       ops.inc(operands);
       break;
+    case 134:
+    case 150:
+      ops.dec(operands);
+      break;
     // case 138:
     case 170:
       ops.print_object(operands);
@@ -782,7 +786,7 @@ const ops = {
     var resultVar = readPC();
 
     var propAddr = propertyAddress(objectId, propertyId);
-    
+
     // skip 1 for the size byte. apparently get_prop_addr is supposed to give
     // the address of the data itself, idk.
     var propDataAddr = propAddr == 0 ? 0 : propAddr + 1;
@@ -1051,6 +1055,12 @@ const ops = {
     var value = toSigned16Bit(readVar(varName));
 
     writeVar(varName, value + 1);
+  },
+  dec: function(operands) {
+    var varName = operands[0];
+    var value = toSigned16Bit(readVar(varName));
+
+    writeVar(varName, value - 1);
   },
   je: function(operands) {
     // je a b ?(label)
