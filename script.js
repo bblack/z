@@ -456,6 +456,7 @@ function executeNextInstruction(dv) {
       break;
     // case 2:
     case 66:
+    case 98:
       ops.jl(operands);
       break;
     // case 3:
@@ -472,7 +473,7 @@ function executeNextInstruction(dv) {
     case 197:
       ops.inc_chk(operands);
       break;
-    // case 6:
+    case 6:
     case 38:
     case 70:
     case 102:
@@ -521,7 +522,7 @@ function executeNextInstruction(dv) {
     case 112:
       ops.loadb(operands);
       break;
-    // case 17:
+    case 17:
     case 81:
       ops.get_prop(operands);
       break;
@@ -529,6 +530,10 @@ function executeNextInstruction(dv) {
     case 82:
     case 114:
       ops.get_prop_addr(operands);
+      break;
+    // case 19:
+    case 115:
+      ops.get_next_prop(operands)
       break;
     case 52:
     case 84:
@@ -589,6 +594,7 @@ function executeNextInstruction(dv) {
     case 160:
       ops.jz(operands);
       break;
+    case 139:
     case 155:
     case 171:
       ops.ret(operands);
@@ -776,10 +782,43 @@ const ops = {
     var resultVar = readPC();
 
     var propAddr = propertyAddress(objectId, propertyId);
-
+    
     // skip 1 for the size byte. apparently get_prop_addr is supposed to give
     // the address of the data itself, idk.
-    writeVar(resultVar, propAddr + 1);
+    var propDataAddr = propAddr == 0 ? 0 : propAddr + 1;
+
+    writeVar(resultVar, propDataAddr);
+  },
+  get_next_prop: function(operands) {
+    var objectId = operands[0];
+    var propertyId = operands[1];
+    var resultVar = readPC();
+
+    // if called with zero, it gives the first property number present
+    if (propertyId == 0) {
+      var propAddressPtr = objectAddress(objectId) + 7;
+      var propAddr = dv.getUint16(propAddressPtr, false);
+      // skip short name length byte and short name:
+      propAddr += (1 + (2 * dv.getUint8(propAddr, false)));
+      var propSizeByte = dv.getUint8(propAddr, false);
+      var nextPropertyId = propSizeByte & 0b0001_1111;
+    } else {
+      var propAddr = propertyAddress(objectId, propertyId);
+
+      // It is illegal to try to find the next property of a property which does not exist
+      if (propAddr == 0) {
+        throw `object ${objectId} doesn't have property ${propertyId}`;
+      }
+
+      var propSizeByte = dv.getUint8(propAddr, false);
+      var currentPropertySize = ((propSizeByte & 0b1110_0000) >> 5) + 1;
+
+      propAddr += (1 + currentPropertySize);
+      propSizeByte = dv.getUint8(propAddr, false);
+      var nextPropertyId = propSizeByte & 0b0001_1111;
+    }
+
+    writeVar(resultVar, nextPropertyId);
   },
   insert_obj: function(operands) {
     var targetId = operands[0];
