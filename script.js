@@ -1,14 +1,3 @@
-// var OPERAND_TYPES = [
-//   {id: 0b00, name: 'LARGE_CONSTANT', size: 2},
-//   {id: 0b01, name: 'SMALL_CONSTANT', size: 1},
-//   {id: 0b10, name: 'VARIABLE', size: 1},
-//   {id: 0b11, name: 'OMITTED', size: 0}
-// ];
-// var OPERAND_TYPES_BY_ID = OPERAND_TYPES.reduce((acc, el) => {acc[el.id] = el; return acc}, {});
-// var OPERAND_TYPES_BY_NAME = OPERAND_TYPES.reduce((acc, el) => {acc[el.name] = el; return acc}, {});
-
-// var sputnik = window.open('sputnik.html', null, 'popup=1');
-
 log("Ready.");
 
 window.addEventListener('unhandledrejection', (e) => log(event.reason, 'red'));
