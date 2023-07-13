@@ -18,12 +18,11 @@ var inputs =
   'e',
   'w',
   'take sword',
-  'eat'
+  'eat',
+  'read leaflet' // TODO: PROBLEM HERE! "Which leaflet do you mean, the leaflet or the leaflet?"
 ];
 
-
-
-// TODO: pry the z-machine apart from the html/dom stuff
+var z = new Z(log);
 var input = document.querySelector("input#file");
 
 function focusInput() {
@@ -40,7 +39,8 @@ input.addEventListener("change", function() {
   focusInput();
 
   file.arrayBuffer().then((ab) => {
-    loadGame(ab);
+    z.loadGame(ab);
+    logHeaderStuff(z);
   });
 });
 
@@ -53,14 +53,51 @@ document.querySelector("#stdin").addEventListener('keypress', function(event) {
   var s = inputEl.textContent;
   inputEl.textContent = '';
 
-  provideInput(s);
+  z.provideInput(s);
 
   // default would add \n to textContent
   event.preventDefault();
 });
 
-function logObjectTable(dv) {
-  var addr = objectTableAddress();
+function logHeaderStuff(z) {
+  // https://inform-fiction.org/zmachine/standards/z1point1/sect11.html
+  var dv = z.dv();
+  var version = dv.getUint8(0x00, false);
+  log("  Version: " + version);
+
+  var flags = dv.getUint16(0x01, false);
+  log("  Flags: ");
+
+  var statusLineType = flags & 0x01;
+  switch (statusLineType) {
+    case 0: log("  Status line type: score/turns"); break;
+    case 1: log("  Status line type: hours:mins"); break;
+    default: log("  Status line type: UNKNOWN " + statusLineType);
+  }
+
+  var storyFileSplitOverTwoDiscs = Boolean(flags & 0x02);
+  log("  Story file split over two discs: " + storyFileSplitOverTwoDiscs);
+
+  var statusLineUnavailable = Boolean(flags & 0x08);
+  log("  Status line unavailable: " + statusLineUnavailable);
+
+  var screenSplittingAvailable = Boolean(flags & 0x10);
+  log("  Screen-splitting available: " + screenSplittingAvailable);
+
+  var isVariablePitchFontDefault = Boolean(flags & 0x20);
+  log("  Is variable-pitch font default: " + isVariablePitchFontDefault);
+
+  log("pc: 0x" + z.pc().toString(16));
+
+  var storyFileLength = dv.getUint16(0x1a, false);
+  log(`Story file length: ${storyFileLength} words (${storyFileLength * 2} bytes)`);
+
+  logObjectTable(z);
+}
+
+function logObjectTable(z) {
+  var dv = z.dv();
+  var addr = z.objectTableAddress();
   log(`  Object table location: ${addr}`);
 
   log(`  Property defaults:`);
@@ -91,7 +128,7 @@ function logObjectTable(dv) {
     // unsure whether we actually need the length?
     var shortNameLength = dv.getUint8(propertiesAddr, false);
     var shortNameBytePtr = propertiesAddr + 1;
-    var shortName = readString(shortNameBytePtr);
+    var shortName = z.readString(shortNameBytePtr);
 
     log(`        name: ${shortName}`);
 
@@ -114,6 +151,10 @@ function printOutput(s) {
   span.scrollIntoView({block: 'start', behavior: 'smooth'})
 }
 
+function log(s) {
+  console.log(s);
+}
+
 function logOnPage(s) {
   var log = document.querySelector("#log");
   var logpane = document.querySelector("#logpane");
@@ -127,13 +168,4 @@ function logOnPage(s) {
 
   // this accounts for 97% of program time?
   logpane.scrollTo(0, logpane.scrollHeight);
-}
-
-function toSigned16Bit(n) {
-  if (n & 0x8000) {
-    // debugger;
-    n = n - 0x1_0000;
-  }
-
-  return n;
 }
