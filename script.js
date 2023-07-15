@@ -22,7 +22,11 @@ var inputs =
   'read leaflet' // TODO: PROBLEM HERE! "Which leaflet do you mean, the leaflet or the leaflet?"
 ];
 
-var z = new Z(log);
+var z = new Z({
+  inputs: inputs,
+  onOutput: printOutput,
+  onLog: log
+});
 var input = document.querySelector("input#file");
 
 function focusInput() {

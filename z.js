@@ -1,6 +1,4 @@
-function Z(log) {
-  // TODO: either pass dv everywhere, or refer to global everywhere.
-  // started using global ref for convenience.
+function Z(opts) {
   var dv;
   var pc = -1;
   // we start with this special, mostly-empty frame in the call stack, because
@@ -22,6 +20,10 @@ function Z(log) {
     new Array(6).fill(undefined).concat('ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')),
     new Array(6).fill(undefined).concat(' \n0123456789.,!?_#\'"/\\-:()'.split('')),
   ];
+  const printOutput = opts.onOutput;
+  const log = opts.onLog;
+  // inputs: a list of commands given before running the game. for testing.
+  const inputs = opts.inputs || [];
 
   var AWAITING_INPUT = false;
 
@@ -43,7 +45,7 @@ function Z(log) {
 
     // defer it to give clients an opportunity to do something before the game
     // runs:
-    setTimeout(readInstructionLoop());
+    setTimeout(() => readInstructionLoop());
   }
 
   function zsciiCodeFromAsciiCode(n) {
@@ -263,7 +265,7 @@ function Z(log) {
     return s;
   }
 
-  function executeNextInstruction(dv) {
+  function executeNextInstruction() {
     var instAddr = pc;
     log(`Reading next instruction, at address 0x${instAddr.toString(16)}`);
 
@@ -1009,7 +1011,7 @@ function Z(log) {
 
       AWAITING_INPUT = true;
 
-      var  s = inputs.shift();
+      var s = inputs.shift();
       if (s) {
         setTimeout(() => provideInput(s));
       }
@@ -1418,4 +1420,8 @@ function Z(log) {
     return n;
   }
 
+}
+
+if (typeof module != 'undefined') {
+  module.exports = Z;
 }
