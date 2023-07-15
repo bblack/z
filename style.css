@@ -2,7 +2,7 @@ body {
 	background: black;
 	color: white;
 	max-width: 600px;
-	margin: .5em auto;
+	margin: 0 auto;
 }
 
 #panes {
@@ -33,9 +33,24 @@ body {
 	flex-shrink: 0;
 }
 
+#panes .pane#mainpane>#file {
+	margin: 0.5em 0;
+}
+
+#panes .pane#mainpane>#status {
+	flex-grow: 0;
+	flex-shrink: 0;
+	margin: 0;
+}
+
+#status>.right {
+  float: right;
+}
+
 #panes .pane#mainpane>#stdout {
 	flex-grow: 1;
 	flex-shrink: 1;
+	margin: 0;
 	overflow-y: scroll;
 }
 

@@ -25,6 +25,7 @@ var inputs =
 var z = new Z({
   inputs: inputs,
   onOutput: printOutput,
+  onStatusLineUpdated: onStatusLineUpdated,
   onLog: log
 });
 var input = document.querySelector("input#file");
@@ -153,6 +154,15 @@ function printOutput(s) {
   outputEl.insertBefore(span, inputEl);
   // outputEl.scrollTo(outputEl.scrollHeight);
   span.scrollIntoView({block: 'start', behavior: 'smooth'})
+}
+
+function onStatusLineUpdated(s, right) {
+  var statusLineEl = document.querySelector("#status");
+  var statusLineRightEl = document.createElement("span");
+  statusLineRightEl.classList.add('right');
+  statusLineEl.textContent = s;
+  statusLineRightEl.textContent = right;
+  statusLineEl.append(statusLineRightEl);
 }
 
 function log(s) {

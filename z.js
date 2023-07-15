@@ -24,6 +24,7 @@ function Z(opts) {
   const log = opts.onLog;
   // inputs: a list of commands given before running the game. for testing.
   const inputs = opts.inputs || [];
+  const onStatusLineUpdated = opts.onStatusLineUpdated || function(){};
 
   var AWAITING_INPUT = false;
 
@@ -1115,6 +1116,32 @@ function Z(opts) {
 
   function redisplayStatusLine() {
     console.warn("redisplayStatusLine not yet implemented");
+    var s = '';
+    var flags = dv.getUint16(0x01, false);
+    var statusLineType = flags & 0x01;
+
+    // 8.2.2
+    // The short name of the object whose number is in the first global variable should be printed on the left hand side of the line.
+    var objectId = readVar(0x10);
+    var propAddressPtr = objectAddress(objectId) + 7;
+    var propAddr = dv.getUint16(propAddressPtr, false);
+    propAddr += 1; // skip short name "length" byte
+    s += readString(propAddr);
+
+    var right;
+    if (statusLineType == 0) {
+      // score
+      var score = toSigned16Bit(readVar(0x11));
+      var turns = readVar(0x12);
+      right = `Score: ${score}  Turns: ${turns}`;
+    } else if (statusLineType == 1) {
+      // time
+      var hours = readVar(0x11);
+      var minutes = readVar(0x12);
+      right = `${hours}:${minutes.padStart(2, '0')}`
+    }
+
+    onStatusLineUpdated(s, right);
   }
 
   function readPC() {
