@@ -109,6 +109,36 @@ describe('Z', () => {
             ["ZORK is a game of adventure, danger, and low cunning. In it you will explore some of the most amazing territory ever seen by mortals. No computer should be without one!\"", "", "", ">"]
           );
         });
+    });
+
+    it('responds properly to "hit the mailbox"', () => {
+      var inputs = ['hit the mailbox'];
+      var collectedOutput = '';
+
+      return fs.readFile('test/zork1.z5')
+        .then((buf) => {
+          var ab = buf.buffer;
+          var z = new Z({
+            inputs: inputs,
+            onLog: () => {},
+            onOutput: (s) => collectedOutput += s
+          });
+
+          z.loadGame(ab);
+
+          // TODO: do this the right way instead of waiting 1 sec
+          return new Promise((resolve) => { setTimeout(resolve, 1_000); });
+        })
+        .then(() => {
+          assert.deepEqual(collectedOutput.split("\n").slice(-4),
+            [
+              ">hit the mailbox",
+              "What do you want to hit the mailbox with?",
+              "",
+              ">"
+            ]
+          );
+        });
     })
   });
 });

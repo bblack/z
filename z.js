@@ -441,9 +441,18 @@ function Z(opts) {
       case 150:
         ops.dec(operands);
         break;
+      // case 135:
+      case 167:
+        ops.print_addr(operands);
+        break;
       // case 138:
       case 170:
         ops.print_object(operands);
+        break;
+      case 139:
+      case 155:
+      case 171:
+        ops.ret(operands);
         break;
       case 140:
         ops.jump(operands);
@@ -458,11 +467,6 @@ function Z(opts) {
         break;
       case 160:
         ops.jz(operands);
-        break;
-      case 139:
-      case 155:
-      case 171:
-        ops.ret(operands);
         break;
       case 176:
         ops.rtrue(operands);
@@ -1098,6 +1102,12 @@ function Z(opts) {
     },
     new_line: function(operands) {
       printOutput("\n");
+    },
+    print_addr: function(operands) {
+      // Print (Z-encoded) string at given byte address, in dynamic or static memory.
+      var addr = operands[0];
+      var s = readString(addr);
+      printOutput(s);
     },
     print_object: function(operands) {
       // TODO validate obj id
