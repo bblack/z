@@ -708,21 +708,11 @@ function Z(opts) {
       var oldParentFirstChildAddr = objectAddress(oldParentFirstChildId);
       var oldParentSecondChildId = dv.getUint8(oldParentFirstChildAddr + 5, false);
 
-      // change src's parent:
+      // change target's parent:
       dv.setUint8(targetAddr + 4, newParentId, false);
 
-      if (newParentId != 0) {
-        var newParentAddr = objectAddress(newParentId);
-
-        // change src's next sibling to new parent's first child:
-        dv.setUint8(targetAddr + 5, dv.getUint8(newParentAddr + 6), false);
-
-        // change new parent's first child:
-        dv.setUint8(newParentAddr + 6, targetId, false);
-      }
-
       // point old parent's first child to old parent's first child's
-      // next sibling, if it was pointing to src; else poinnt its prev sibling to
+      // next sibling, if it was pointing to target; else poinnt its prev sibling to
       // its next
       if (oldParentFirstChildId == targetId) {
         dv.setUint8(oldParentAddr + 6, oldParentSecondChildId, false);
@@ -738,7 +728,7 @@ function Z(opts) {
           nextSiblingId = dv.getUint8(currentSiblingAddr + 5, false);
 
           if (nextSiblingId == targetId) {
-            // if the next sibling is "src", point this to the one after:
+            // if the next sibling is "target", point this to the one after:
             nextSiblingAddr = objectAddress(nextSiblingId);
             childAfterNextId = dv.getUint8(nextSiblingAddr + 5, false);
             dv.setUint8(currentSiblingAddr + 5, childAfterNextId, false);
@@ -750,6 +740,19 @@ function Z(opts) {
             currentSiblingId = nextSiblingId;
           }
         }
+      }
+
+      if (newParentId == 0) {
+        // change target's next sibling to 0:
+        dv.setUint8(targetAddr + 5, 0, false);
+      } else {
+        var newParentAddr = objectAddress(newParentId);
+
+        // change target's next sibling to new parent's first child:
+        dv.setUint8(targetAddr + 5, dv.getUint8(newParentAddr + 6), false);
+
+        // change new parent's first child:
+        dv.setUint8(newParentAddr + 6, targetId, false);
       }
     },
     loadw: function(operands) {
