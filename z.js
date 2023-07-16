@@ -268,11 +268,11 @@ function Z(opts) {
 
   function executeNextInstruction() {
     var instAddr = pc;
-    log(`Reading next instruction, at address 0x${instAddr.toString(16)}`);
 
     // https://www.inform-fiction.org/zmachine/standards/z1point1/sect04.html
     var firstByte = readPC();
-    log(`  Found firstByte 0x${firstByte.toString(16).padStart(2, '0')} / 0b${firstByte.toString(2).padStart(8, '0')}`);
+    this.icount = (this.icount || 0) + 1;
+    log(`icount: ` + icount);
 
     log(`0x${(pc-1).toString(16).padStart(4, '0')}: ${firstByte}`);
 
@@ -1118,7 +1118,6 @@ function Z(opts) {
   };
 
   function redisplayStatusLine() {
-    console.warn("redisplayStatusLine not yet implemented");
     var s = '';
     var flags = dv.getUint16(0x01, false);
     var statusLineType = flags & 0x01;
@@ -1167,13 +1166,19 @@ function Z(opts) {
 
   function readOperandsShort(firstByte) {
     var operandType = (firstByte & 0b0011_0000) >> 4;
+    var operands;
 
     switch (operandType) {
       case 0b11: // none; 0OP
-        return [];
+        operands = [];
+        break;
       default: // 1OP
-        return [readNextOperand(operandType)];
+        operands = [readNextOperand(operandType)];
     }
+
+    logOperands([operandType], operands);
+
+    return operands;
   }
 
   function readOperandsLong(firstByte) {
@@ -1189,6 +1194,9 @@ function Z(opts) {
       readNextOperand(operandTypes[0]),
       readNextOperand(operandTypes[1])
     ];
+
+    logOperands(operandTypes, operands)
+
     return operands;
   }
 
@@ -1216,10 +1224,14 @@ function Z(opts) {
       operandIndex += 1;
     }
 
-    log("  operand types: " + operandTypes.join(", "));
-    log("  operands: " + operands.map((o) => '0x' + o.toString(16)).join(", "));
+    logOperands(operandTypes, operands);
 
     return operands;
+  }
+
+  function logOperands(operandTypes, operands) {
+    log("  operand types: " + operandTypes.join(", "));
+    log("  operands: " + operands.map((o) => '0x' + o.toString(16)).join(", "));
   }
 
   function readNextOperand(operandType) {

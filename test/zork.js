@@ -72,5 +72,43 @@ describe('Z', () => {
           )
         });
     });
+
+    it('produces the expected output after collecting some things and re-reading the leaflet', () => {
+      var inputs = [
+        'open mailbox',
+        'read leaflet',
+        'e',
+        'n',
+        'e',
+        'open',
+        'open window',
+        'enter',
+        'take bottle',
+        'w',
+        'take lantern',
+        'read leaflet'
+      ];
+      var collectedOutput = '';
+
+      return fs.readFile('test/zork1.z5')
+        .then((buf) => {
+          var ab = buf.buffer;
+          var z = new Z({
+            inputs: inputs,
+            onLog: () => {},
+            onOutput: (s) => collectedOutput += s
+          });
+
+          z.loadGame(ab);
+
+          // TODO: do this the right way instead of waiting 1 sec
+          return new Promise((resolve) => { setTimeout(resolve, 1_000); });
+        })
+        .then(() => {
+          assert.equal(collectedOutput.split("\n").slice(-3),
+            ["ZORK is a game of adventure, danger, and low cunning. In it you will explore some of the most amazing territory ever seen by mortals. No computer should be without one!\"", "", ""]
+          );
+        });
+    })
   });
 });

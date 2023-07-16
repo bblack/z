@@ -15,10 +15,10 @@ var inputs =
   'take bottle',
   'w',
   'take lantern',
-  'e',
-  'w',
-  'take sword',
-  'eat',
+  // 'e',
+  // 'w',
+  // 'take sword',
+  // 'eat',
   'read leaflet' // TODO: PROBLEM HERE! "Which leaflet do you mean, the leaflet or the leaflet?"
 ];
 
