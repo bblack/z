@@ -43,7 +43,12 @@ body {
 	margin: 0;
 }
 
-#status>.right {
+#panes .pane#mainpane>#status>.inner {
+	background: white;
+	color: black;
+}
+
+#status .right {
   float: right;
 }
 
@@ -52,6 +57,15 @@ body {
 	flex-shrink: 1;
 	margin: 0;
 	overflow-y: scroll;
+
+	display: flex;
+	/*
+	8.6.3
+	At the start of a game, the screen should be cleared and the text cursor
+	placed at the bottom left (so that text scrolls upwards as the game gets under
+	way).
+	*/
+	flex-direction: column-reverse;
 }
 
 #panes .pane#logpane {

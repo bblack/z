@@ -2,25 +2,7 @@ log("Ready.");
 
 window.addEventListener('unhandledrejection', (e) => log(event.reason, 'red'));
 
-var inputs =
-[
-  'open mailbox',
-  'read leaflet',
-  'e',
-  'n',
-  'e',
-  'open',
-  'open window',
-  'enter',
-  'take bottle',
-  'w',
-  'take lantern',
-  // 'e',
-  // 'w',
-  // 'take sword',
-  // 'eat',
-  'read leaflet' // TODO: PROBLEM HERE! "Which leaflet do you mean, the leaflet or the leaflet?"
-];
+var inputs = [];
 
 var z = new Z({
   inputs: inputs,
@@ -146,7 +128,7 @@ function logObjectTable(z) {
 // -- Below here: stuff that's NOT part of the z-machine --
 
 function printOutput(s) {
-  var outputEl = document.querySelector('#stdout');
+  var outputEl = document.querySelector('#stdout>.inner');
   var inputEl = document.querySelector('#stdin');
   var span = document.createElement('span');
 
@@ -158,11 +140,18 @@ function printOutput(s) {
 
 function onStatusLineUpdated(s, right) {
   var statusLineEl = document.querySelector("#status");
+  var statusLineInnerEl = document.createElement("div");
   var statusLineRightEl = document.createElement("span");
-  statusLineRightEl.classList.add('right');
-  statusLineEl.textContent = s;
+
+  statusLineInnerEl.textContent = s;
+  statusLineInnerEl.classList.add('inner');
+
   statusLineRightEl.textContent = right;
-  statusLineEl.append(statusLineRightEl);
+  statusLineRightEl.classList.add('right');
+
+  statusLineEl.innerText = ''; // delete children in preparation to replace
+  statusLineInnerEl.append(statusLineRightEl);
+  statusLineEl.append(statusLineInnerEl);
 }
 
 function log(s) {
