@@ -105,8 +105,8 @@ describe('Z', () => {
           return new Promise((resolve) => { setTimeout(resolve, 1_000); });
         })
         .then(() => {
-          assert.equal(collectedOutput.split("\n").slice(-3),
-            ["ZORK is a game of adventure, danger, and low cunning. In it you will explore some of the most amazing territory ever seen by mortals. No computer should be without one!\"", "", ""]
+          assert.deepEqual(collectedOutput.split("\n").slice(-4),
+            ["ZORK is a game of adventure, danger, and low cunning. In it you will explore some of the most amazing territory ever seen by mortals. No computer should be without one!\"", "", "", ">"]
           );
         });
     })
