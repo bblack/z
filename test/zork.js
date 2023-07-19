@@ -139,6 +139,36 @@ describe('Z', () => {
             ]
           );
         });
-    })
+    });
+
+    it('responds properly to "tear leaflet"', () => {
+      var inputs = ['tear leaflet'];
+      var collectedOutput = '';
+
+      return fs.readFile('test/zork1.z5')
+        .then((buf) => {
+          var ab = buf.buffer;
+          var z = new Z({
+            inputs: inputs,
+            onLog: () => {},
+            onOutput: (s) => collectedOutput += s
+          });
+
+          z.loadGame(ab);
+
+          // TODO: do this the right way instead of waiting 1 sec
+          return new Promise((resolve) => { setTimeout(resolve, 1_000); });
+        })
+        .then(() => {
+          assert.deepEqual(collectedOutput.split("\n").slice(-4),
+            [
+              ">tear leaflet",
+              "I don't know the word \"tear\".",
+              "",
+              ">"
+            ]
+          );
+        });
+    });
   });
 });

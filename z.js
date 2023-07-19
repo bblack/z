@@ -324,6 +324,7 @@ function Z(opts) {
       case 35:
       case 67:
       case 99:
+      case 195:
         ops.jg(operands);
         break;
       case 4:
