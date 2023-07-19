@@ -279,199 +279,143 @@ function Z(opts) {
 
     var form;
     var canonicalOpcode;
-    var opcode = firstByte;
+    var opcode;
     var operands;
 
-    switch ((opcode & 0b1100_0000) >> 6) { // form=?
+    switch ((firstByte & 0b1100_0000) >> 6) { // form=?
       case 0b11: // variable
         form = 'var';
-        canonicalOpcode = firstByte & 0b1_1111;
+        canonicalOpcode = (firstByte & 0b0010_0000) ?
+          firstByte : // VAR
+          firstByte & 0b0001_1111; // VAR forms of 2OP
         operands = readOperandsVAR();
         break;
       case 0b10: // short
         form = 'short';
-        canonicalOpcode = firstByte & 0b1111;
+        canonicalOpcode = ((firstByte & 0b0011_0000) == 0b0011_0000) ?
+          firstByte & 0b1011_1111 : // 0OP
+          firstByte & 0b1000_1111; // 1OP
         operands = readOperandsShort(firstByte);
         break;
       default: // long
         form = 'long';
-        canonicalOpcode = firstByte & 0b1_1111;
+        canonicalOpcode = firstByte & 0b0001_1111;
         operands = readOperandsLong(firstByte);
         break;
     }
 
-    log(`  form=${form}; canonicalOpcode=0x${canonicalOpcode.toString(16)}`);
-
-
-    // TODO: STOP ENUMERATING EVERY ALIAS - THIS IS ERROR PRONE AND SLOWS
-    // DEVELOPMENT
+    log(`  form=${form}; canonicalOpcode=${canonicalOpcode.toString()}`);
 
     // opcodes by name: https://inform-fiction.org/zmachine/standards/z1point1/sect15.html
     // opcodes by number: https://inform-fiction.org/zmachine/standards/z1point1/sect14.html
-    switch (opcode) {
-      // case 1:
-      case 33:
-      case 65:
-      case 97:
-      case 193: // var form
+    switch (canonicalOpcode) {
+      case 1:
         ops.je(operands);
         break;
-      // case 2:
-      case 66:
-      case 98:
+      case 2:
         ops.jl(operands);
         break;
-      // case 3:
-      case 35:
-      case 67:
-      case 99:
-      case 195:
+      case 3:
         ops.jg(operands);
         break;
       case 4:
         ops.dec_chk(operands);
         break;
       case 5:
-      case 37:
-      case 197:
         ops.inc_chk(operands);
         break;
       case 6:
-      case 38:
-      case 70:
-      case 102:
         ops.jin(operands);
         break;
-      // case 7:
-      case 71:
-      case 103:
+      case 7:
         ops.test(operands);
         break;
-      // case 9:
-      case 73:
+      case 9:
         ops.and(operands);
         break;
       case 10:
-      case 74:
-      case 106:
         ops.test_attr(operands);
         break;
       case 11:
-      case 75:
         ops.set_attr(operands);
         break;
       case 12:
-      case 76:
         ops.clear_attr(operands);
         break;
       case 13:
-      case 45:
-      case 205:
         ops.store(operands);
         break;
-      // case 14:
-      case 46:
-      case 110:
+      case 14:
         ops.insert_obj(operands);
         break;
       case 15:
-      case 79:
-      case 111:
         ops.loadw(operands);
         break;
       case 16:
-      case 48:
-      case 80:
-      case 112:
         ops.loadb(operands);
         break;
       case 17:
-      case 81:
         ops.get_prop(operands);
         break;
       case 18:
-      case 82:
-      case 114:
         ops.get_prop_addr(operands);
         break;
-      // case 19:
-      case 115:
+      case 19:
         ops.get_next_prop(operands)
         break;
-      case 52:
-      case 84:
-      case 116:
+      case 20:
         // add a b -> (result); a is a 'var', b is a 'small constant'
         ops.add(operands);
         break;
-      case 53:
-      case 85:
-      case 117:
+      case 21:
         ops.sub(operands);
         break;
-      // case 22:
-      case 86:
+      case 22:
         ops.mul(operands);
         break;
-      // case 23:
-      case 87:
+      case 23:
         ops.div(operands);
         break;
-      // case 129:
-      case 161:
+      case 129:
         ops.get_sibling(operands);
         break;
-      // case 130:
-      case 146:
-      case 162:
+      case 130:
         ops.get_child(operands);
         break;
-      // case 131:
-      case 147:
-      case 163:
+      case 131:
         ops.get_parent(operands);
         break;
-      // case 132:
-      case 164:
+      case 132:
         ops.get_prop_len(operands);
         break;
-      // case 133:
-      case 149:
+      case 133:
         ops.inc(operands);
         break;
       case 134:
-      case 150:
         ops.dec(operands);
         break;
-      // case 135:
-      case 167:
+      case 135:
         ops.print_addr(operands);
         break;
-      // case 137:
-      case 169:
+      case 137:
         ops.remove_obj(operands);
         break;
-      // case 138:
-      case 170:
+      case 138:
         ops.print_object(operands);
         break;
       case 139:
-      case 155:
-      case 171:
         ops.ret(operands);
         break;
       case 140:
         ops.jump(operands);
         break;
-      // case 141:
-      case 173:
+      case 141:
         ops.print_paddr(operands);
         break;
-      // case 142:
-      case 174:
+      case 142:
         ops.load(operands);
         break;
-      case 160:
+      case 128:
         ops.jz(operands);
         break;
       case 176:
