@@ -11,15 +11,16 @@ describe('Z', () => {
       return fs.readFile('test/zork1.z5')
         .then((buf) => {
           var ab = buf.buffer;
-          var z = new Z({
-            onLog: () => {},
-            onOutput: (s) => collectedOutput += s
+
+          return new Promise((resolve) => {
+            var z = new Z({
+              onAwaitingInput: resolve,
+              onLog: () => {},
+              onOutput: (s) => collectedOutput += s
+            });
+
+            z.loadGame(ab);
           });
-
-          z.loadGame(ab);
-
-          // TODO: do this the right way instead of waiting 1 sec
-          return new Promise((resolve) => { setTimeout(resolve, 1_000); });
         })
         .then(() => {
           assert.equal(collectedOutput,
@@ -43,16 +44,17 @@ describe('Z', () => {
       return fs.readFile('test/zork1.z5')
         .then((buf) => {
           var ab = buf.buffer;
-          var z = new Z({
-            inputs: ['eat'],
-            onLog: () => {},
-            onOutput: (s) => collectedOutput += s
+
+          return new Promise((resolve) => {
+            var z = new Z({
+              inputs: ['eat'],
+              onAwaitingInput: resolve,
+              onLog: () => {},
+              onOutput: (s) => collectedOutput += s
+            });
+
+            z.loadGame(ab);
           });
-
-          z.loadGame(ab);
-
-          // TODO: do this the right way instead of waiting 1 sec
-          return new Promise((resolve) => { setTimeout(resolve, 1_000); });
         })
         .then(() => {
           assert.equal(collectedOutput,
@@ -93,16 +95,17 @@ describe('Z', () => {
       return fs.readFile('test/zork1.z5')
         .then((buf) => {
           var ab = buf.buffer;
-          var z = new Z({
-            inputs: inputs,
-            onLog: () => {},
-            onOutput: (s) => collectedOutput += s
+
+          return new Promise((resolve) => {
+            var z = new Z({
+              inputs: inputs,
+              onAwaitingInput: resolve,
+              onLog: () => {},
+              onOutput: (s) => collectedOutput += s
+            });
+
+            z.loadGame(ab);
           });
-
-          z.loadGame(ab);
-
-          // TODO: do this the right way instead of waiting 1 sec
-          return new Promise((resolve) => { setTimeout(resolve, 1_000); });
         })
         .then(() => {
           assert.deepEqual(collectedOutput.split("\n").slice(-4),
@@ -118,16 +121,17 @@ describe('Z', () => {
       return fs.readFile('test/zork1.z5')
         .then((buf) => {
           var ab = buf.buffer;
-          var z = new Z({
-            inputs: inputs,
-            onLog: () => {},
-            onOutput: (s) => collectedOutput += s
+
+          return new Promise((resolve) => {
+            var z = new Z({
+              inputs: inputs,
+              onAwaitingInput: resolve,
+              onLog: () => {},
+              onOutput: (s) => collectedOutput += s
+            });
+
+            z.loadGame(ab);
           });
-
-          z.loadGame(ab);
-
-          // TODO: do this the right way instead of waiting 1 sec
-          return new Promise((resolve) => { setTimeout(resolve, 1_000); });
         })
         .then(() => {
           assert.deepEqual(collectedOutput.split("\n").slice(-4),
@@ -148,16 +152,17 @@ describe('Z', () => {
       return fs.readFile('test/zork1.z5')
         .then((buf) => {
           var ab = buf.buffer;
-          var z = new Z({
-            inputs: inputs,
-            onLog: () => {},
-            onOutput: (s) => collectedOutput += s
+
+          return new Promise((resolve) => {
+            var z = new Z({
+              inputs: inputs,
+              onAwaitingInput: resolve,
+              onLog: () => {},
+              onOutput: (s) => collectedOutput += s
+            });
+
+            z.loadGame(ab);
           });
-
-          z.loadGame(ab);
-
-          // TODO: do this the right way instead of waiting 1 sec
-          return new Promise((resolve) => { setTimeout(resolve, 1_000); });
         })
         .then(() => {
           assert.deepEqual(collectedOutput.split("\n").slice(-4),
@@ -180,16 +185,17 @@ describe('Z', () => {
       return fs.readFile('test/zork1.z5')
         .then((buf) => {
           var ab = buf.buffer;
-          var z = new Z({
-            inputs: inputs,
-            onLog: () => {},
-            onOutput: (s) => collectedOutput += s
+
+          return new Promise((resolve) => {
+            var z = new Z({
+              inputs: inputs,
+              onAwaitingInput: resolve,
+              onLog: () => {},
+              onOutput: (s) => collectedOutput += s
+            });
+
+            z.loadGame(ab);
           });
-
-          z.loadGame(ab);
-
-          // TODO: do this the right way instead of waiting 1 sec
-          return new Promise((resolve) => { setTimeout(resolve, 1_000); });
         })
         .then(() => {
           assert.deepEqual(collectedOutput.split("\n").slice(-5),

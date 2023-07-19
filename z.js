@@ -20,6 +20,7 @@ function Z(opts) {
     new Array(6).fill(undefined).concat('ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')),
     new Array(6).fill(undefined).concat(' \n0123456789.,!?_#\'"/\\-:()'.split('')),
   ];
+  const onAwaitingInput = opts.onAwaitingInput || function(){};
   const printOutput = opts.onOutput;
   const log = opts.onLog;
   // inputs: a list of commands given before running the game. for testing.
@@ -964,6 +965,8 @@ function Z(opts) {
       var s = inputs.shift();
       if (s) {
         setTimeout(() => provideInput(s));
+      } else {
+        onAwaitingInput();
       }
     },
     print_char: function(operands) {
