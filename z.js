@@ -306,177 +306,14 @@ function Z(opts) {
 
     log(`  form=${form}; canonicalOpcode=${canonicalOpcode.toString()}`);
 
-    // opcodes by name: https://inform-fiction.org/zmachine/standards/z1point1/sect15.html
-    // opcodes by number: https://inform-fiction.org/zmachine/standards/z1point1/sect14.html
-    switch (canonicalOpcode) {
-      case 1:
-        ops.je(operands);
-        break;
-      case 2:
-        ops.jl(operands);
-        break;
-      case 3:
-        ops.jg(operands);
-        break;
-      case 4:
-        ops.dec_chk(operands);
-        break;
-      case 5:
-        ops.inc_chk(operands);
-        break;
-      case 6:
-        ops.jin(operands);
-        break;
-      case 7:
-        ops.test(operands);
-        break;
-      case 9:
-        ops.and(operands);
-        break;
-      case 10:
-        ops.test_attr(operands);
-        break;
-      case 11:
-        ops.set_attr(operands);
-        break;
-      case 12:
-        ops.clear_attr(operands);
-        break;
-      case 13:
-        ops.store(operands);
-        break;
-      case 14:
-        ops.insert_obj(operands);
-        break;
-      case 15:
-        ops.loadw(operands);
-        break;
-      case 16:
-        ops.loadb(operands);
-        break;
-      case 17:
-        ops.get_prop(operands);
-        break;
-      case 18:
-        ops.get_prop_addr(operands);
-        break;
-      case 19:
-        ops.get_next_prop(operands)
-        break;
-      case 20:
-        // add a b -> (result); a is a 'var', b is a 'small constant'
-        ops.add(operands);
-        break;
-      case 21:
-        ops.sub(operands);
-        break;
-      case 22:
-        ops.mul(operands);
-        break;
-      case 23:
-        ops.div(operands);
-        break;
-      case 129:
-        ops.get_sibling(operands);
-        break;
-      case 130:
-        ops.get_child(operands);
-        break;
-      case 131:
-        ops.get_parent(operands);
-        break;
-      case 132:
-        ops.get_prop_len(operands);
-        break;
-      case 133:
-        ops.inc(operands);
-        break;
-      case 134:
-        ops.dec(operands);
-        break;
-      case 135:
-        ops.print_addr(operands);
-        break;
-      case 137:
-        ops.remove_obj(operands);
-        break;
-      case 138:
-        ops.print_object(operands);
-        break;
-      case 139:
-        ops.ret(operands);
-        break;
-      case 140:
-        ops.jump(operands);
-        break;
-      case 141:
-        ops.print_paddr(operands);
-        break;
-      case 142:
-        ops.load(operands);
-        break;
-      case 128:
-        ops.jz(operands);
-        break;
-      case 176:
-        ops.rtrue(operands);
-        break;
-      case 177:
-        ops.rfalse(operands);
-        break;
-      case 178:
-        ops.print(operands);
-        break;
-      case 179:
-        ops.print_ret(operands);
-        break;
-      case 184:
-        ops.ret_popped(operands);
-        break;
-      case 187:
-        ops.new_line();
-        break;
-      case 201:
-        // top 2 bits are 11, so form=VAR
-        // form=VAR and next topmost bit is 0, so opcount=2OP.
-        // bottom 5 bits are 9, so...? 2OP:9, bitwise and?
-        ops.and(operands);
-        break;
-      case 224:
-        ops.call(operands);
-        break;
-      case 225:
-        ops.storew(operands);
-        break;
-      case 226:
-        ops.storeb(operands);
-        break;
-      case 227:
-        ops.put_prop(operands);
-        break;
-      case 228:
-        ops.read(operands);
-        break;
-      case 229:
-        ops.print_char(operands);
-        break;
-      case 230:
-        ops.print_num(operands);
-        break;
-      case 231:
-        ops.random(operands);
-        break;
-      case 232:
-        ops.push(operands);
-        break;
-      case 233:
-        ops.pull(operands);
-        break;
-      default:
-        throw `unsupported opcode ${opcode}`;
-    }
-  }
+    var handler = opcodeHandlers[canonicalOpcode]
 
+    if (!handler) {
+      throw `unsupported opcode ${canonicalOpcode}`;
+    }
+
+    handler.call(this, operands);
+  }
 
   const ops = {
     dec_chk: function(operands) {
@@ -1019,6 +856,64 @@ function Z(opts) {
       offset = toSigned16Bit(offset);
       pc += (offset - 2);
     }
+  };
+
+  // opcodes by name: https://inform-fiction.org/zmachine/standards/z1point1/sect15.html
+  // opcodes by number: https://inform-fiction.org/zmachine/standards/z1point1/sect14.html
+  const opcodeHandlers = {
+    1: ops.je,
+    2: ops.jl,
+    3: ops.jg,
+    4: ops.dec_chk,
+    5: ops.inc_chk,
+    6: ops.jin,
+    7: ops.test,
+    9: ops.and,
+    10: ops.test_attr,
+    11: ops.set_attr,
+    12: ops.clear_attr,
+    13: ops.store,
+    14: ops.insert_obj,
+    15: ops.loadw,
+    16: ops.loadb,
+    17: ops.get_prop,
+    18: ops.get_prop_addr,
+    19: ops.get_next_prop,
+    20: ops.add,
+    21: ops.sub,
+    22: ops.mul,
+    23: ops.div,
+    129: ops.get_sibling,
+    130: ops.get_child,
+    131: ops.get_parent,
+    132: ops.get_prop_len,
+    133: ops.inc,
+    134: ops.dec,
+    135: ops.print_addr,
+    137: ops.remove_obj,
+    138: ops.print_object,
+    139: ops.ret,
+    140: ops.jump,
+    141: ops.print_paddr,
+    142: ops.load,
+    128: ops.jz,
+    176: ops.rtrue,
+    177: ops.rfalse,
+    178: ops.print,
+    179: ops.print_ret,
+    184: ops.ret_popped,
+    187: ops.new_line,
+    201: ops.and,
+    224: ops.call,
+    225: ops.storew,
+    226: ops.storeb,
+    227: ops.put_prop,
+    228: ops.read,
+    229: ops.print_char,
+    230: ops.print_num,
+    231: ops.random,
+    232: ops.push,
+    233: ops.pull
   };
 
   function redisplayStatusLine() {
