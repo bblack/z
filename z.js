@@ -446,6 +446,10 @@ function Z(opts) {
       case 167:
         ops.print_addr(operands);
         break;
+      // case 137:
+      case 169:
+        ops.remove_obj(operands);
+        break;
       // case 138:
       case 170:
         ops.print_object(operands);
@@ -695,70 +699,7 @@ function Z(opts) {
       var targetId = operands[0];
       var newParentId = operands[1];
 
-      // TODO: validate ids are in proper range
-      if (targetId == 0) { throw 'nyi'; }
-      if (targetId > 255) { throw 'invalid'; }
-      if (newParentId > 255) { throw 'invalid'; }
-
-      // TODO:
-      // var zobj_t = new Struct([definition])
-      // var destObj = zobj_t.at(dv, address)'
-      // TODO: dry up with logObjectTable e.g.
-      var targetAddr = objectAddress(targetId);
-
-      // TODO: properly handle "old parent = null"
-      var oldParentId = dv.getUint8(targetAddr + 4, false);
-      var oldParentAddr = objectAddress(oldParentId);
-      var oldParentFirstChildId = dv.getUint8(oldParentAddr + 6, false);
-      var oldParentFirstChildAddr = objectAddress(oldParentFirstChildId);
-      var oldParentSecondChildId = dv.getUint8(oldParentFirstChildAddr + 5, false);
-
-      // change target's parent:
-      dv.setUint8(targetAddr + 4, newParentId, false);
-
-      // point old parent's first child to old parent's first child's
-      // next sibling, if it was pointing to target; else poinnt its prev sibling to
-      // its next
-      if (oldParentFirstChildId == targetId) {
-        dv.setUint8(oldParentAddr + 6, oldParentSecondChildId, false);
-      } else {
-        var currentSiblingId = oldParentFirstChildId;
-        var currentSiblingAddr;
-        var nextSiblingId;
-        var nextSiblingAddr;
-        var childAfterNextId;
-
-        while (true) {
-          currentSiblingAddr = objectAddress(currentSiblingId);
-          nextSiblingId = dv.getUint8(currentSiblingAddr + 5, false);
-
-          if (nextSiblingId == targetId) {
-            // if the next sibling is "target", point this to the one after:
-            nextSiblingAddr = objectAddress(nextSiblingId);
-            childAfterNextId = dv.getUint8(nextSiblingAddr + 5, false);
-            dv.setUint8(currentSiblingAddr + 5, childAfterNextId, false);
-            break;
-          } else if (nextSiblingId == 0) {
-            // if the next sibling is null, we're at the end.
-            break;
-          } else {
-            currentSiblingId = nextSiblingId;
-          }
-        }
-      }
-
-      if (newParentId == 0) {
-        // change target's next sibling to 0:
-        dv.setUint8(targetAddr + 5, 0, false);
-      } else {
-        var newParentAddr = objectAddress(newParentId);
-
-        // change target's next sibling to new parent's first child:
-        dv.setUint8(targetAddr + 5, dv.getUint8(newParentAddr + 6), false);
-
-        // change new parent's first child:
-        dv.setUint8(newParentAddr + 6, targetId, false);
-      }
+      setObjectParent(targetId, newParentId);
     },
     loadw: function(operands) {
       var arrayAddress = operands[0];
@@ -1110,6 +1051,11 @@ function Z(opts) {
       var s = readString(addr);
       printOutput(s);
     },
+    remove_obj: function(operands) {
+      var targetId = operands[0];
+
+      setObjectParent(targetId, 0);
+    },
     print_object: function(operands) {
       // TODO validate obj id
       var objectId = operands[0];
@@ -1357,6 +1303,74 @@ function Z(opts) {
     } else {
       // "As with get_prop the property length must not be more than 2: if it is, the behaviour of the opcode is undefined."
       throw `unsupported property value size: ${propSize}`;
+    }
+  }
+
+  function setObjectParent(targetId, newParentId) {
+    // TODO: validate ids are in proper range
+    if (targetId == 0) { throw 'nyi'; }
+    if (targetId > 255) { throw 'invalid'; }
+    if (newParentId > 255) { throw 'invalid'; }
+    if (newParentId < 0) { throw 'invalid'; }
+
+    // TODO:
+    // var zobj_t = new Struct([definition])
+    // var destObj = zobj_t.at(dv, address)'
+    // TODO: dry up with logObjectTable e.g.
+    var targetAddr = objectAddress(targetId);
+
+    // TODO: properly handle "old parent = null"
+    var oldParentId = dv.getUint8(targetAddr + 4, false);
+    var oldParentAddr = objectAddress(oldParentId);
+    var oldParentFirstChildId = dv.getUint8(oldParentAddr + 6, false);
+    var oldParentFirstChildAddr = objectAddress(oldParentFirstChildId);
+    var oldParentSecondChildId = dv.getUint8(oldParentFirstChildAddr + 5, false);
+
+    // change target's parent:
+    dv.setUint8(targetAddr + 4, newParentId, false);
+
+    // point old parent's first child to old parent's first child's
+    // next sibling, if it was pointing to target; else poinnt its prev sibling to
+    // its next
+    if (oldParentFirstChildId == targetId) {
+      dv.setUint8(oldParentAddr + 6, oldParentSecondChildId, false);
+    } else {
+      var currentSiblingId = oldParentFirstChildId;
+      var currentSiblingAddr;
+      var nextSiblingId;
+      var nextSiblingAddr;
+      var childAfterNextId;
+
+      while (true) {
+        currentSiblingAddr = objectAddress(currentSiblingId);
+        nextSiblingId = dv.getUint8(currentSiblingAddr + 5, false);
+
+        if (nextSiblingId == targetId) {
+          // if the next sibling is "target", point this to the one after:
+          nextSiblingAddr = objectAddress(nextSiblingId);
+          childAfterNextId = dv.getUint8(nextSiblingAddr + 5, false);
+          dv.setUint8(currentSiblingAddr + 5, childAfterNextId, false);
+          break;
+        } else if (nextSiblingId == 0) {
+          // if the next sibling is null, we're at the end.
+          break;
+        } else {
+          currentSiblingId = nextSiblingId;
+        }
+      }
+    }
+
+    if (newParentId == 0) {
+      // change target's next sibling to 0:
+      dv.setUint8(targetAddr + 5, 0, false);
+    } else {
+      var newParentAddr = objectAddress(newParentId);
+
+      // change target's next sibling to new parent's first child:
+      dv.setUint8(targetAddr + 5, dv.getUint8(newParentAddr + 6), false);
+
+      // change new parent's first child:
+      dv.setUint8(newParentAddr + 6, targetId, false);
     }
   }
 

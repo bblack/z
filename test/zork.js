@@ -170,5 +170,38 @@ describe('Z', () => {
           );
         });
     });
+
+    it('responds properly to "drink"', () => {
+      var inputs = [
+        'n', 'e', 'open', 'enter', 'open bottle', 'take bottle', 'drink'
+      ];
+      var collectedOutput = '';
+
+      return fs.readFile('test/zork1.z5')
+        .then((buf) => {
+          var ab = buf.buffer;
+          var z = new Z({
+            inputs: inputs,
+            onLog: () => {},
+            onOutput: (s) => collectedOutput += s
+          });
+
+          z.loadGame(ab);
+
+          // TODO: do this the right way instead of waiting 1 sec
+          return new Promise((resolve) => { setTimeout(resolve, 1_000); });
+        })
+        .then(() => {
+          assert.deepEqual(collectedOutput.split("\n").slice(-5),
+            [
+              ">drink",
+              "(quantity of water)",
+              "Thank you very much. I was rather thirsty (from all this talking, probably).",
+              "",
+              ">"
+            ]
+          );
+        });
+    });
   });
 });
