@@ -19,17 +19,31 @@ function focusInput() {
 window.addEventListener('focus', () => focusInput());
 document.querySelector('#stdout').addEventListener('click', () => focusInput());
 
-input.addEventListener("change", function() {
-  var file = this.files[0];
-  log(`received file ${file.name} of size ${file.size} bytes`);
+if (input) {
+  input.addEventListener("change", function() {
+    var file = this.files[0];
+    log(`received file ${file.name} of size ${file.size} bytes`);
 
-  focusInput();
-
-  file.arrayBuffer().then((ab) => {
-    z.loadGame(ab);
-    logHeaderStuff(z);
+    file.arrayBuffer().then((ab) => {
+      focusInputAndStartGame(ab);
+    });
   });
-});
+}
+
+fetch('/zork1.z5')
+  .then((res) => {
+    if (!res.ok) { throw 'res not ok'; }
+    return res.arrayBuffer();
+  })
+  .then((ab) => {
+    focusInputAndStartGame(ab);
+  });
+
+function focusInputAndStartGame(ab) {
+  focusInput();
+  z.loadGame(ab);
+  logHeaderStuff(z);
+}
 
 // document.querySelector("#stdin").addEventListener('change', function(event) {
 document.querySelector("#stdin").addEventListener('keypress', function(event) {

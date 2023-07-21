@@ -11,5 +11,8 @@
   "devDependencies": {
     "mocha": "^10.2.0",
     "sinon": "^15.2.0"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
   }
 }
