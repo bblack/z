@@ -1,9 +1,11 @@
 var path = require('path');
+var compression = require('compression');
 var express = require("express");
 
 var app = express();
 var port = process.env.PORT || 3000;
 
+app.use(compression({filter: () => true}));
 app.use(express.static('public'));
 app.get('/z.js', (req, res) => {
   res.sendFile(path.join(__dirname, 'z.js'));
