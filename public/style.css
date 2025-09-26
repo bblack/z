@@ -107,6 +107,19 @@ span#stdin {
 	outline: none;
 }
 
+#links {
+              opacity: 40%;
+              position: absolute;
+              bottom: 0;
+              right: 0;
+              margin: 1em;
+              font-size: 12px
+      }
+
+#links a {
+  color: #8080ff;
+}
+
 @keyframes fadein {
 	0% {
 	    opacity: 0;
